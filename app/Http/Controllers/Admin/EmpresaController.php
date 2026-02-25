@@ -27,6 +27,7 @@ class EmpresaController extends Controller
             'NIT' => 'required|string|max:20',
             'nombre' => 'required|string|max:255',
             'activa' => 'boolean',
+            'correos_cuenta_cobro' => 'nullable|string|max:1000',
         ]);
         $valid['activa'] = $request->boolean('activa');
         Empresa::create($valid);
@@ -44,6 +45,7 @@ class EmpresaController extends Controller
             'NIT' => 'required|string|max:20',
             'nombre' => 'required|string|max:255',
             'activa' => 'boolean',
+            'correos_cuenta_cobro' => 'nullable|string|max:1000',
         ]);
         $valid['activa'] = $request->boolean('activa');
         $empresa->update($valid);

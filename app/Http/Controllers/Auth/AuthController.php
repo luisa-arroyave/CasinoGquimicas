@@ -21,16 +21,15 @@ class AuthController extends Controller
     }
 
     /**
-     * Procesar login.
+     * Procesar login (por número de documento, usando tabla usuarios).
      */
     public function login(Request $request): RedirectResponse
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'documento' => ['required', 'string'],
             'password' => ['required'],
         ], [
-            'email.required' => 'El correo electrónico es obligatorio.',
-            'email.email' => 'El correo no es válido.',
+            'documento.required' => 'El número de documento es obligatorio.',
             'password.required' => 'La contraseña es obligatoria.',
         ]);
 
@@ -43,8 +42,8 @@ class AuthController extends Controller
         }
 
         return back()->withErrors([
-            'email' => __('Las credenciales no coinciden con nuestros registros.'),
-        ])->onlyInput('email');
+            'documento' => __('Las credenciales no coinciden con nuestros registros.'),
+        ])->onlyInput('documento');
     }
 
     /**
@@ -62,40 +61,20 @@ class AuthController extends Controller
 
     /**
      * Mostrar formulario de registro.
+     *
+     * En este sistema, los usuarios se crean desde Admin → Usuarios,
+     * así que se deshabilita el registro público.
      */
     public function showRegisterForm(): View
     {
-        return view('auth.register');
+        abort(404);
     }
 
     /**
-     * Procesar registro de nuevo usuario.
+     * Procesar registro de nuevo usuario (deshabilitado).
      */
     public function register(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
-            'password' => ['required', 'confirmed', Password::defaults()],
-        ], [
-            'name.required' => 'El nombre es obligatorio.',
-            'email.required' => 'El correo electrónico es obligatorio.',
-            'email.unique' => 'Ya existe una cuenta con este correo.',
-            'password.required' => 'La contraseña es obligatoria.',
-            'password.confirmed' => 'La confirmación de contraseña no coincide.',
-        ]);
-
-        $user = \App\Models\User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password' => Hash::make($validated['password']),
-            'role' => config('roles.default', 'empleado'),
-        ]);
-
-        Auth::login($user);
-
-        $request->session()->regenerate();
-
-        return redirect()->route('dashboard');
+        abort(404);
     }
 }

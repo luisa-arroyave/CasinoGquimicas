@@ -15,7 +15,15 @@
             tailwind.config = { theme: { extend: { fontFamily: { sans: ['Instrument Sans', 'ui-sans-serif', 'system-ui', 'sans-serif'] } } } };
         </script>
     @endif
-    <style>body{font-family:'Instrument Sans',ui-sans-serif,system-ui,sans-serif}</style>
+    <style>
+        body{font-family:'Instrument Sans',ui-sans-serif,system-ui,sans-serif}
+        input:not([type=checkbox]):not([type=radio]), select, textarea {
+            border-radius: 0.25rem !important;
+            min-height: 3rem !important;
+            padding: 0.625rem 1rem !important;
+            font-size: 1rem !important;
+        }
+    </style>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center py-6 px-4 sm:py-12 sm:px-6 font-sans overflow-x-hidden">
     <div class="w-full max-w-md min-w-0">
@@ -43,9 +51,9 @@
                            class="w-full rounded-lg border border-slate-300 px-4 py-3 sm:py-2.5 text-base text-slate-900 min-h-[48px] focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20">
                 </div>
                 <div>
-                    <label for="email" class="block text-sm font-medium text-slate-700 mb-1">Correo electrónico</label>
-                    <input type="email" name="email" id="email" value="{{ old('email') }}" required autocomplete="email"
-                           class="w-full rounded-lg border border-slate-300 px-4 py-3 sm:py-2.5 text-base text-slate-900 min-h-[48px] focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20">
+                    <label for="documento" class="block text-sm font-medium text-slate-700 mb-1">Número de documento</label>
+                    <input type="text" name="documento" id="documento" value="{{ old('documento') }}" required autocomplete="username"
+                           class="w-full rounded-lg border border-slate-300 px-4 py-3 sm:py-2.5 text-base text-slate-900 min-h-[48px] focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20" placeholder="Ej: 12345678">
                 </div>
                 <div>
                     <label for="password" class="block text-sm font-medium text-slate-700 mb-1">Contraseña</label>

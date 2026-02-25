@@ -48,43 +48,68 @@ class ConsumoValidarQrController extends Controller
         $codigoQr = trim($request->input('codigo_qr'));
         $idCasino = (int) $request->input('id_casino');
 
-        // Buscar usuario por codigo_qr (activo)
-        $usuario = Usuario::where('codigo_qr', $codigoQr)
-            ->where('activo', true)
-            ->first();
+        $consumo = null;
 
-        if (! $usuario) {
-            return response()->json([
-                'ok' => false,
-                'mensaje' => 'QR no válido o usuario inactivo.',
-            ], 404);
+        // Formato nuevo: QR generado al registrar consumo (CONSUMO:id_consumo)
+        if (preg_match('/^CONSUMO:(\d+)$/', $codigoQr, $m)) {
+            $consumo = RegistroConsumo::with(['usuario', 'horarioConsumo'])
+                ->where('id_consumo', (int) $m[1])
+                ->where('estado', 'SOLICITADO')
+                ->first();
+
+            if (! $consumo) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'Código QR no válido o consumo ya fue entregado.',
+                ], 404);
+            }
+            if ($consumo->id_casino != $idCasino) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'Este consumo corresponde a otro punto de entrega. Seleccione el casino correcto.',
+                ], 400);
+            }
+        } else {
+            // Formato legacy: codigo_qr del usuario (tabla usuarios)
+            $usuario = Usuario::where('codigo_qr', $codigoQr)
+                ->where('activo', true)
+                ->first();
+
+            if (! $usuario) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'QR no válido o usuario inactivo.',
+                ], 404);
+            }
+
+            $horario = HorarioConsumo::horarioVigente();
+            if (! $horario) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'No hay horario de consumo vigente en este momento.',
+                ], 400);
+            }
+
+            $hoy = Carbon::today()->toDateString();
+            $consumo = RegistroConsumo::with(['usuario', 'horarioConsumo'])
+                ->where('id_usuario', $usuario->id_usuario)
+                ->where('id_casino', $idCasino)
+                ->where('id_horario', $horario->id_horario)
+                ->whereDate('fecha_consumo', $hoy)
+                ->where('estado', 'SOLICITADO')
+                ->first();
+
+            if (! $consumo) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'No hay consumo solicitado para este horario (' . $horario->nombre . ').',
+                ], 404);
+            }
         }
 
-        // Horario vigente según hora actual
-        $horario = HorarioConsumo::horarioVigente();
-        if (! $horario) {
-            return response()->json([
-                'ok' => false,
-                'mensaje' => 'No hay horario de consumo vigente en este momento.',
-            ], 400);
-        }
-
-        $hoy = Carbon::today()->toDateString();
-
-        // Buscar consumo en estado SOLICITADO para este usuario, hoy, este horario y casino
-        $consumo = RegistroConsumo::where('id_usuario', $usuario->id_usuario)
-            ->where('id_casino', $idCasino)
-            ->where('id_horario', $horario->id_horario)
-            ->whereDate('fecha_consumo', $hoy)
-            ->where('estado', 'SOLICITADO')
-            ->first();
-
-        if (! $consumo) {
-            return response()->json([
-                'ok' => false,
-                'mensaje' => 'No hay consumo solicitado para este horario (' . $horario->nombre . ').',
-            ], 404);
-        }
+        $usuario = $consumo->usuario;
+        $horario = $consumo->horarioConsumo;
+        $hoy = Carbon::parse($consumo->fecha_consumo)->toDateString();
 
         // Confirmar: cambiar estado a ENTREGADO y registrar hora real
         $consumo->update([
@@ -103,9 +128,9 @@ class ConsumoValidarQrController extends Controller
             'mensaje' => 'Entrega registrada correctamente.',
             'consumo' => [
                 'id_consumo' => $consumo->id_consumo,
-                'nombres' => $usuario->nombres,
-                'documento' => $usuario->documento,
-                'horario' => $horario->nombre,
+                'nombres' => $usuario?->nombres ?? '—',
+                'documento' => $usuario?->documento ?? '—',
+                'horario' => $horario?->nombre ?? '—',
                 'hora_entrega' => $consumo->hora_consumo,
             ],
             'entregados_hoy' => $entregadosHoy,

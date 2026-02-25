@@ -14,10 +14,19 @@ class GestionHumanaController extends Controller
 {
     /**
      * Reportes: filtro por fechas y empresa, ver consumo por empresa.
+     * Si el usuario tiene empresas asignadas (administrador/gestión humana), solo ve esas.
      */
     public function index(Request $request): View
     {
-        $empresas = Empresa::where('activa', true)->orderBy('nombre')->get();
+        $user = $request->user();
+        $empresasPermitidas = $user->empresasAcceso()->get()->pluck('id_empresa')->toArray();
+
+        if (count($empresasPermitidas) > 0) {
+            $empresas = Empresa::where('activa', true)->whereIn('id_empresa', $empresasPermitidas)->orderBy('nombre')->get();
+        } else {
+            $empresas = Empresa::where('activa', true)->orderBy('nombre')->get();
+        }
+
         $fechaDesde = $request->input('fecha_desde', Carbon::today()->subDays(7)->toDateString());
         $fechaHasta = $request->input('fecha_hasta', Carbon::today()->toDateString());
         $idEmpresa = $request->input('id_empresa');
@@ -28,6 +37,12 @@ class GestionHumanaController extends Controller
             ->orderBy('fecha_consumo')
             ->orderBy('id_empresa')
             ->orderBy('hora_consumo');
+
+        if (count($empresasPermitidas) > 0) {
+            $query->whereIn('id_empresa', $empresasPermitidas);
+        } elseif ($user->role === 'gestionhumana') {
+            $query->where('id_empresa', $user->id_empresa);
+        }
 
         if ($idEmpresa) {
             $query->where('id_empresa', $idEmpresa);
@@ -73,6 +88,9 @@ class GestionHumanaController extends Controller
             'fecha_hasta' => ['required', 'date', 'after_or_equal:fecha_desde'],
         ]);
 
+        $user = $request->user();
+        $empresasPermitidas = $user->empresasAcceso()->get()->pluck('id_empresa')->toArray();
+
         $fechaDesde = $request->input('fecha_desde');
         $fechaHasta = $request->input('fecha_hasta');
         $idEmpresa = $request->input('id_empresa');
@@ -84,6 +102,11 @@ class GestionHumanaController extends Controller
             ->orderBy('fecha_consumo')
             ->orderBy('hora_consumo');
 
+        if (count($empresasPermitidas) > 0) {
+            $query->whereIn('id_empresa', $empresasPermitidas);
+        } elseif ($user->role === 'gestionhumana') {
+            $query->where('id_empresa', $user->id_empresa);
+        }
         if ($idEmpresa) {
             $query->where('id_empresa', $idEmpresa);
         }
@@ -118,6 +141,9 @@ class GestionHumanaController extends Controller
             'fecha_hasta' => ['required', 'date', 'after_or_equal:fecha_desde'],
         ]);
 
+        $user = $request->user();
+        $empresasPermitidas = $user->empresasAcceso()->get()->pluck('id_empresa')->toArray();
+
         $fechaDesde = $request->input('fecha_desde');
         $fechaHasta = $request->input('fecha_hasta');
         $idEmpresa = $request->input('id_empresa');
@@ -129,6 +155,11 @@ class GestionHumanaController extends Controller
             ->orderBy('fecha_consumo')
             ->orderBy('hora_consumo');
 
+        if (count($empresasPermitidas) > 0) {
+            $query->whereIn('id_empresa', $empresasPermitidas);
+        } elseif ($user->role === 'gestionhumana') {
+            $query->where('id_empresa', $user->id_empresa);
+        }
         if ($idEmpresa) {
             $query->where('id_empresa', $idEmpresa);
         }

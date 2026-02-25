@@ -17,7 +17,17 @@
             };
         </script>
     @endif
-    <style>body{font-family:'Instrument Sans',ui-sans-serif,system-ui,sans-serif,'Segoe UI',Roboto,sans-serif}</style>
+    <style>
+        body{font-family:'Instrument Sans',ui-sans-serif,system-ui,sans-serif,'Segoe UI',Roboto,sans-serif}
+        /* Campos de texto cuadrados y un poco más grandes */
+        input:not([type=checkbox]):not([type=radio]), select, textarea {
+            border-radius: 0.25rem !important;
+            min-height: 3rem !important;
+            padding: 0.625rem 1rem !important;
+            font-size: 1rem !important;
+        }
+        textarea { min-height: 5rem !important; }
+    </style>
 </head>
 <body class="bg-slate-50 text-slate-900 antialiased min-h-screen font-sans overflow-x-hidden">
     <div class="flex min-h-screen min-w-0">
@@ -47,12 +57,11 @@
                         <a href="{{ route('admin.empresas.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.empresas.*') ? 'bg-slate-800 text-white' : '' }}">Empresas</a>
                         <a href="{{ route('admin.casinos.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.casinos.*') ? 'bg-slate-800 text-white' : '' }}">Casinos</a>
                         <a href="{{ route('admin.horarios.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.horarios.*') ? 'bg-slate-800 text-white' : '' }}">Horarios</a>
-                        <a href="{{ route('admin.tipos-usuario.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.tipos-usuario.*') ? 'bg-slate-800 text-white' : '' }}">Tipos de usuario</a>
                         <a href="{{ route('admin.visitantes.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.visitantes.*') ? 'bg-slate-800 text-white' : '' }}">Visitantes</a>
-                        <a href="{{ route('admin.roles.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.roles.*') ? 'bg-slate-800 text-white' : '' }}">Roles</a>
-                        <a href="{{ route('admin.usuarios.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.usuarios.*') ? 'bg-slate-800 text-white' : '' }}">Usuarios (empleados)</a>
-                        <a href="{{ route('admin.users.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.users.*') ? 'bg-slate-800 text-white' : '' }}">Usuarios del sistema</a>
+                        <a href="{{ route('admin.usuarios.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.usuarios.*') ? 'bg-slate-800 text-white' : '' }}">Usuarios</a>
                         <a href="{{ route('admin.consumos-manuales.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.consumos-manuales.*') ? 'bg-slate-800 text-white' : '' }}">Registro manual consumos</a>
+                        <a href="{{ route('admin.roles.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.roles.*') ? 'bg-slate-800 text-white' : '' }}">Roles</a>
+                        <a href="{{ route('admin.tipos-usuario.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.tipos-usuario.*') ? 'bg-slate-800 text-white' : '' }}">Tipos de usuario</a>
                     </div>
                     @endrole
 

@@ -75,12 +75,21 @@
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Descargar PDF
             </a>
+            @php
+                $empresaCuenta = $cuentaGenerada->casino->empresa ?? null;
+                $correosEmpresa = $empresaCuenta ? $empresaCuenta->correos_cuenta_cobro_list : [];
+            @endphp
+            @if(count($correosEmpresa) > 0)
+                <p class="text-sm text-slate-600 mb-2">Se enviará a los correos de la empresa: <span class="font-medium">{{ implode(', ', $correosEmpresa) }}</span></p>
+            @endif
             <form method="post" action="{{ route('casino.cuenta-cobro.enviar', $cuentaGenerada->id_cuenta) }}" class="inline">
                 @csrf
-                <div class="inline-flex items-center gap-2">
-                    <input type="email" name="email_contabilidad" value="{{ config('mail.contabilidad') }}"
-                           placeholder="contabilidad@empresa.com"
-                           class="rounded-lg border border-slate-300 px-3 py-2 text-sm w-56 focus:border-slate-500 focus:ring-2 focus:ring-slate-500">
+                <div class="inline-flex flex-wrap items-center gap-2">
+                    @if(count($correosEmpresa) === 0)
+                        <input type="email" name="email_contabilidad" value="{{ config('mail.contabilidad') }}"
+                               placeholder="contabilidad@empresa.com"
+                               class="rounded-lg border border-slate-300 px-3 py-2 text-sm w-56 focus:border-slate-500 focus:ring-2 focus:ring-slate-500">
+                    @endif
                     <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                         Enviar a contabilidad

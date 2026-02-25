@@ -23,7 +23,7 @@ class CuentaCobroController extends Controller
         $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
         $cuentaGenerada = null;
         if ($request->has('cuenta_id')) {
-            $cuentaGenerada = CuentaCobro::with('casino')->find($request->input('cuenta_id'));
+            $cuentaGenerada = CuentaCobro::with('casino.empresa')->find($request->input('cuenta_id'));
         }
 
         return view('casino.cuenta-cobro.index', [
@@ -115,18 +115,32 @@ class CuentaCobroController extends Controller
 
     /**
      * Enviar PDF por correo a contabilidad.
+     * Usa los correos configurados en la empresa del casino; si no hay, usa el campo del formulario o config.
      */
     public function enviarCorreo(Request $request, int $id): \Illuminate\Http\RedirectResponse
     {
-        $cuenta = CuentaCobro::with('casino')->findOrFail($id);
+        $cuenta = CuentaCobro::with('casino.empresa')->findOrFail($id);
         if (! $cuenta->archivo_pdf || ! Storage::disk('local')->exists($cuenta->archivo_pdf)) {
             return redirect()->route('casino.cuenta-cobro.index')->with('error', 'El archivo PDF no está disponible.');
         }
 
-        $emailContabilidad = $request->input('email_contabilidad', config('mail.contabilidad', config('mail.from.address')));
+        $empresa = $cuenta->casino->empresa;
+        $correosEmpresa = $empresa ? $empresa->correos_cuenta_cobro_list : [];
 
-        Mail::to($emailContabilidad)->send(new CuentaCobroEnviada($cuenta));
+        if (count($correosEmpresa) > 0) {
+            $destinatarios = $correosEmpresa;
+        } else {
+            $emailContabilidad = $request->input('email_contabilidad', config('mail.contabilidad', config('mail.from.address')));
+            $destinatarios = array_filter([$emailContabilidad]);
+        }
 
-        return redirect()->route('casino.cuenta-cobro.index')->with('success', 'Cuenta de cobro enviada por correo a ' . $emailContabilidad);
+        if (empty($destinatarios)) {
+            return redirect()->route('casino.cuenta-cobro.index')->with('error', 'Configure al menos un correo en la empresa o en el formulario.');
+        }
+
+        Mail::to($destinatarios)->send(new CuentaCobroEnviada($cuenta));
+
+        $mensaje = 'Cuenta de cobro enviada por correo a ' . implode(', ', $destinatarios);
+        return redirect()->route('casino.cuenta-cobro.index')->with('success', $mensaje);
     }
 }
