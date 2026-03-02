@@ -17,7 +17,17 @@
             };
         </script>
     @endif
-    <style>body{font-family:'Instrument Sans',ui-sans-serif,system-ui,sans-serif,'Segoe UI',Roboto,sans-serif}</style>
+    <style>
+        body{font-family:'Instrument Sans',ui-sans-serif,system-ui,sans-serif,'Segoe UI',Roboto,sans-serif}
+        /* Campos de texto cuadrados y un poco más grandes */
+        input:not([type=checkbox]):not([type=radio]), select, textarea {
+            border-radius: 0.25rem !important;
+            min-height: 3rem !important;
+            padding: 0.625rem 1rem !important;
+            font-size: 1rem !important;
+        }
+        textarea { min-height: 5rem !important; }
+    </style>
 </head>
 <body class="bg-slate-50 text-slate-900 antialiased min-h-screen font-sans overflow-x-hidden">
     <div class="flex min-h-screen min-w-0">
@@ -47,12 +57,12 @@
                         <a href="{{ route('admin.empresas.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.empresas.*') ? 'bg-slate-800 text-white' : '' }}">Empresas</a>
                         <a href="{{ route('admin.casinos.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.casinos.*') ? 'bg-slate-800 text-white' : '' }}">Casinos</a>
                         <a href="{{ route('admin.horarios.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.horarios.*') ? 'bg-slate-800 text-white' : '' }}">Horarios</a>
-                        <a href="{{ route('admin.tipos-usuario.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.tipos-usuario.*') ? 'bg-slate-800 text-white' : '' }}">Tipos de usuario</a>
                         <a href="{{ route('admin.visitantes.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.visitantes.*') ? 'bg-slate-800 text-white' : '' }}">Visitantes</a>
-                        <a href="{{ route('admin.roles.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.roles.*') ? 'bg-slate-800 text-white' : '' }}">Roles</a>
-                        <a href="{{ route('admin.usuarios.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.usuarios.*') ? 'bg-slate-800 text-white' : '' }}">Usuarios (empleados)</a>
-                        <a href="{{ route('admin.users.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.users.*') ? 'bg-slate-800 text-white' : '' }}">Usuarios del sistema</a>
+                        <a href="{{ route('admin.usuarios.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.usuarios.*') ? 'bg-slate-800 text-white' : '' }}">Usuarios</a>
                         <a href="{{ route('admin.consumos-manuales.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.consumos-manuales.*') ? 'bg-slate-800 text-white' : '' }}">Registro manual consumos</a>
+                        <a href="{{ route('admin.roles.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.roles.*') ? 'bg-slate-800 text-white' : '' }}">Roles</a>
+                        <a href="{{ route('admin.tipos-usuario.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.tipos-usuario.*') ? 'bg-slate-800 text-white' : '' }}">Tipos de usuario</a>
+                        <a href="{{ route('admin.sedes.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.sedes.*') ? 'bg-slate-800 text-white' : '' }}">Sedes</a>
                     </div>
                     @endrole
 
@@ -75,13 +85,13 @@
                     @endrole
 
                     @role('casino')
-                    <a href="{{ route('casino.escaneo-qr') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.escaneo-qr') ? 'bg-slate-800 text-white' : '' }}">
-                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                        <span>Registrar consumo</span>
-                    </a>
                     <a href="{{ route('casino.panel') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.panel') ? 'bg-slate-800 text-white' : '' }}">
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         <span>Panel Casino</span>
+                    </a>
+                    <a href="{{ route('casino.escaneo-qr') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.escaneo-qr') ? 'bg-slate-800 text-white' : '' }}">
+                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                        <span>Registro Manual</span>
                     </a>
                     <a href="{{ route('casino.cuenta-cobro.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.cuenta-cobro.*') ? 'bg-slate-800 text-white' : '' }}">
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v2M9 5h6M9 5v2m0 4v6m0-6h6m-6 6h6m-6 6v-6"/></svg>
@@ -94,13 +104,13 @@
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                         <span>Pedidos a domicilio</span>
                     </a>
-                    <a href="{{ route('casino.escaneo-qr') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.escaneo-qr') ? 'bg-slate-800 text-white' : '' }}">
-                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
-                        <span>Registrar consumo</span>
-                    </a>
                     <a href="{{ route('casino.panel') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.panel') ? 'bg-slate-800 text-white' : '' }}">
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         <span>Panel Casino</span>
+                    </a>
+                    <a href="{{ route('casino.escaneo-qr') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.escaneo-qr') ? 'bg-slate-800 text-white' : '' }}">
+                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                        <span>Registro Manual</span>
                     </a>
                     @endrole
                 </nav>

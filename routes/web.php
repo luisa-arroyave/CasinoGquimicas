@@ -7,8 +7,8 @@ use App\Http\Controllers\Admin\EmpresaController;
 use App\Http\Controllers\Admin\HorarioController;
 use App\Http\Controllers\Admin\PrecioController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\SedeController;
 use App\Http\Controllers\Admin\TipoUsuarioController;
-use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\UsuarioController as AdminUsuarioController;
 use App\Http\Controllers\Admin\VisitanteController;
 use App\Http\Controllers\Api\ConsumoValidarQrController;
@@ -98,6 +98,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:empleado')->group(function () {
         Route::get('/solicitar-consumo', [SolicitarConsumoController::class, 'create'])->name('solicitar-consumo.create');
         Route::post('/solicitar-consumo', [SolicitarConsumoController::class, 'store'])->name('solicitar-consumo.store');
+        Route::get('/solicitar-consumo/mostrar-qr/{consumo}', [SolicitarConsumoController::class, 'mostrarQr'])->name('solicitar-consumo.mostrar-qr');
     });
 
     // Módulo operativo: pedidos a domicilio pendientes y marcar ENTREGADO
@@ -110,13 +111,13 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:administrador')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', [AdminController::class, 'index'])->name('index');
         Route::resource('empresas', EmpresaController::class)->parameters(['empresa' => 'empresa']);
+        Route::resource('sedes', SedeController::class)->parameters(['sede' => 'sede']);
         Route::resource('casinos', AdminCasinoController::class)->parameters(['casino' => 'casino']);
         Route::resource('horarios', HorarioController::class)->parameters(['horario' => 'horario']);
         Route::resource('tipos-usuario', TipoUsuarioController::class)->parameters(['tipo_usuario' => 'tipoUsuario']);
         Route::resource('visitantes', VisitanteController::class)->parameters(['visitante' => 'visitante']);
         Route::resource('roles', RoleController::class)->parameters(['role' => 'role']);
         Route::resource('usuarios', AdminUsuarioController::class)->parameters(['usuario' => 'usuario']);
-        Route::resource('users', UserController::class);
         Route::resource('precios', PrecioController::class)->parameters(['precio' => 'precio']);
         Route::get('consumos-manuales', [ConsumoManualController::class, 'index'])->name('consumos-manuales.index');
         Route::get('consumos-manuales/crear', [ConsumoManualController::class, 'create'])->name('consumos-manuales.create');

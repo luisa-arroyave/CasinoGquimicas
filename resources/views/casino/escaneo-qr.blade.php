@@ -24,23 +24,28 @@
         <p class="text-sm text-slate-500">Entregas registradas en este punto</p>
     </div>
 
-    <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
-        <h2 class="text-base sm:text-lg font-semibold text-slate-800 mb-3">Escanear o pegar código QR</h2>
-        <div class="flex flex-col sm:flex-row gap-3">
-            <input type="text" id="input-qr" placeholder="Pegar código QR o resultado del escáner"
-                   class="w-full min-w-0 flex-1 rounded-lg border border-slate-300 px-4 py-3 text-base sm:text-sm text-slate-900 placeholder-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 min-h-[48px]"
-                   autocomplete="off">
-            <button type="button" id="btn-validar" class="w-full sm:w-auto min-h-[48px] px-6 py-3 rounded-lg bg-slate-800 text-white font-medium hover:bg-slate-700 active:bg-slate-600 focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors touch-manipulation shrink-0">
-                Validar
-            </button>
-        </div>
-        <div id="zona-camara" class="mt-4 hidden">
-            <div id="lector-qr" class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 w-full max-w-sm mx-auto min-h-[200px]"></div>
-            <p class="text-center text-sm text-slate-500 mt-2">Apunta la cámara al código QR</p>
-        </div>
-        <button type="button" id="btn-toggle-camara" class="mt-3 min-h-[44px] flex items-center text-sm text-slate-600 hover:text-slate-800 underline touch-manipulation">
+    <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm relative">
+        <h2 class="text-base sm:text-lg font-semibold text-slate-800 mb-3">Escanear código QR</h2>
+
+        {{-- Campo oculto para lectores de código de barras (se comportan como teclado y envían Enter) --}}
+        <input type="text" id="input-qr"
+               class="absolute -left-[9999px] top-0 opacity-0"
+               autocomplete="off">
+
+        <button type="button" id="btn-toggle-camara" class="w-full sm:w-auto min-h-[48px] px-6 py-3 rounded-lg bg-slate-800 text-white font-medium hover:bg-slate-700 active:bg-slate-600 focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors touch-manipulation">
             Usar cámara para escanear
         </button>
+        <div id="zona-camara" class="mt-4 hidden">
+            <div id="lector-qr" class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 w-full max-w-sm mx-auto min-h-[280px] aspect-square max-h-[70vh]"></div>
+            <p class="text-center text-sm text-slate-500 mt-2">Apunta la cámara al código QR. Mantén el código centrado y a una distancia estable.</p>
+            <p class="text-center text-xs text-slate-400 mt-1">Si no detecta, puedes subir una foto del QR.</p>
+            <label class="mt-2 flex justify-center">
+                <span class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium cursor-pointer hover:bg-slate-200">
+                    Subir foto del QR
+                </span>
+                <input type="file" id="input-foto-qr" accept="image/*" capture="environment" class="hidden">
+            </label>
+        </div>
     </div>
 
     <div id="resultado" class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm hidden">
@@ -50,12 +55,11 @@
 </div>
 
 @push('scripts')
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{{ asset('js/html5-qrcode.min.js') }}"></script>
 <script>
 (function() {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
     const inputQr = document.getElementById('input-qr');
-    const btnValidar = document.getElementById('btn-validar');
     const idCasinoSelect = document.getElementById('id_casino');
     const contadorEl = document.getElementById('contador-entregados');
     const resultadoEl = document.getElementById('resultado');
@@ -67,6 +71,7 @@
 
     let scanner = null;
     let entregadosHoy = 0;
+    let ultimoCodigoLeido = '';
 
     function playSuccessSound() {
         try {
@@ -104,6 +109,7 @@
         }
         resultadoMensaje.textContent = mensaje;
         resultadoDetalle.textContent = detalle || '';
+        resultadoEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     function validarQr(codigoQr) {
@@ -113,11 +119,10 @@
             return;
         }
         if (!codigoQr || !codigoQr.trim()) {
-            showResult(false, 'Ingresa o escanea un código QR.', '');
+            showResult(false, 'Escanea un código QR.', '');
             return;
         }
 
-        btnValidar.disabled = true;
         fetch('{{ url("/api/consumo/validar-qr") }}', {
             method: 'POST',
             headers: {
@@ -131,33 +136,55 @@
         .then(r => r.json())
         .then(data => {
             if (data.ok) {
-                showResult(true, data.mensaje, data.consumo ? (data.consumo.nombres + ' · ' + data.consumo.horario) : '', data.entregados_hoy);
-                inputQr.value = '';
-                if (scanner && scanner.isScanning()) scanner.pause();
+                showResult(true, 'Consumo registrado correctamente.', data.consumo ? (data.consumo.nombres + ' · ' + data.consumo.horario) : '', data.entregados_hoy);
+                ultimoCodigoLeido = '';
+                try { if (scanner && typeof scanner.resume === 'function') scanner.resume(); } catch (e) {}
             } else {
                 showResult(false, data.mensaje || 'Error al validar.', '');
             }
         })
-        .catch(() => showResult(false, 'Error de conexión. Intenta de nuevo.', ''))
-        .finally(() => { btnValidar.disabled = false; });
+        .catch(() => showResult(false, 'Error de conexión. Intenta de nuevo.', ''));
     }
 
-    btnValidar.addEventListener('click', function() {
-        validarQr(inputQr.value);
-    });
-    inputQr.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') validarQr(inputQr.value);
-    });
+    // Soporte para lector de código QR conectado como teclado:
+    // escribe en input oculto y envía Enter al final.
+    if (inputQr) {
+        // Mantener el foco en el input para que reciba lo que escriba el lector
+        const focusInput = () => inputQr.focus();
+        focusInput();
+        inputQr.addEventListener('blur', () => {
+            // Pequeño delay para no pelear con otros focos legítimos
+            setTimeout(focusInput, 50);
+        });
+
+        inputQr.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const valor = inputQr.value;
+                inputQr.value = '';
+                ultimoCodigoLeido = valor;
+                validarQr(valor);
+            }
+        });
+    }
 
     btnToggleCamara.addEventListener('click', function() {
         if (zonaCamara.classList.contains('hidden')) {
             zonaCamara.classList.remove('hidden');
             if (!window.Html5Qrcode) return;
             scanner = new Html5Qrcode('lector-qr');
-            scanner.start({ facingMode: 'environment' }, { fps: 5 }, function(decodedText) {
+            var config = { fps: 10 };
+            scanner.start({ facingMode: 'environment' }, config, function(decodedText) {
+                ultimoCodigoLeido = decodedText;
+                // Pausar de inmediato para evitar lecturas repetidas
+                if (scanner && scanner.isScanning && scanner.isScanning()) {
+                    scanner.pause();
+                }
+                // Validar automáticamente sin pedir "Enviar"
                 validarQr(decodedText);
-                scanner.pause();
-            }).catch(() => {});
+            }).catch(function(err) {
+                showResult(false, 'No se pudo iniciar la cámara.', err && err.message ? String(err.message) : '');
+            });
         } else {
             zonaCamara.classList.add('hidden');
             if (scanner) { scanner.stop(); scanner = null; }
@@ -176,6 +203,34 @@
     }
     actualizarContadorInicial();
     idCasinoSelect.addEventListener('change', actualizarContadorInicial);
+
+    // Fallback: subir foto del QR si la cámara en vivo no detecta
+    var inputFotoQr = document.getElementById('input-foto-qr');
+    if (inputFotoQr) {
+        inputFotoQr.addEventListener('change', function(e) {
+            var file = e.target.files && e.target.files[0];
+            if (!file || !file.type.startsWith('image/')) return;
+            if (!window.Html5Qrcode) return;
+            inputFotoQr.value = '';
+            var configCam = { fps: 10 };
+            var onScan = function(t) { if (scanner && scanner.isScanning && scanner.isScanning()) scanner.pause(); validarQr(t); };
+            var scanFileNow = function(sc) {
+                sc.scanFile(file, false).then(function(decodedText) {
+                    validarQr(decodedText);
+                    if (sc === scanner) scanner.start({ facingMode: 'environment' }, configCam, onScan).catch(function() {});
+                }).catch(function() {
+                    showResult(false, 'No se detectó ningún código QR en la imagen.', 'Intenta con otra foto o escanea en vivo.');
+                    if (sc === scanner) scanner.start({ facingMode: 'environment' }, configCam, onScan).catch(function() {});
+                });
+            };
+            if (scanner && scanner.getState && scanner.getState() === 2) {
+                scanner.stop().then(function() { scanFileNow(scanner); }).catch(function() { scanFileNow(scanner); });
+            } else {
+                var sc = new Html5Qrcode('lector-qr');
+                scanFileNow(sc);
+            }
+        });
+    }
 })();
 </script>
 @endpush

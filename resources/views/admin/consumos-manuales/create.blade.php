@@ -83,12 +83,14 @@
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label for="precio_empleado" class="block text-sm font-medium text-slate-700">Precio empleado</label>
-                <input type="number" name="precio_empleado" id="precio_empleado" value="{{ old('precio_empleado', 0) }}" step="0.01" min="0" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                <input type="number" name="precio_empleado" id="precio_empleado" value="{{ old('precio_empleado', 0) }}" step="0.01" min="0" required readonly class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm bg-slate-50 cursor-not-allowed">
+                <p class="mt-1 text-xs text-slate-500">Según precio asignado al casino y horario seleccionado.</p>
                 @error('precio_empleado')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
             <div>
                 <label for="precio_casino" class="block text-sm font-medium text-slate-700">Precio casino</label>
-                <input type="number" name="precio_casino" id="precio_casino" value="{{ old('precio_casino', 0) }}" step="0.01" min="0" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                <input type="number" name="precio_casino" id="precio_casino" value="{{ old('precio_casino', 0) }}" step="0.01" min="0" required readonly class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm bg-slate-50 cursor-not-allowed">
+                <p class="mt-1 text-xs text-slate-500">Según precio asignado al casino y horario seleccionado.</p>
                 @error('precio_casino')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
         </div>
@@ -110,6 +112,22 @@
 </div>
 @push('scripts')
 <script>
+var preciosPorCasinoHorario = @json($precios);
+function actualizarPrecios() {
+    var idCasino = document.getElementById('id_casino').value;
+    var idHorario = document.getElementById('id_horario').value;
+    var key = idCasino + '-' + idHorario;
+    var datos = preciosPorCasinoHorario[key];
+    var precioEmp = document.getElementById('precio_empleado');
+    var precioCas = document.getElementById('precio_casino');
+    if (datos) {
+        precioEmp.value = datos.precio_empleado;
+        precioCas.value = datos.precio_casino;
+    } else {
+        precioEmp.value = '0';
+        precioCas.value = '0';
+    }
+}
 document.querySelectorAll('input[name="tipo_consumidor"]').forEach(function(radio) {
     radio.addEventListener('change', function() {
         var esUsuario = this.value === 'usuario';
@@ -125,8 +143,11 @@ document.getElementById('id_casino').addEventListener('change', function() {
     var opt = this.options[this.selectedIndex];
     var esDomicilio = opt && (opt.getAttribute('data-tipo') || '') === 'domicilio';
     document.getElementById('campo-direccion').classList.toggle('hidden', !esDomicilio);
+    actualizarPrecios();
 });
+document.getElementById('id_horario').addEventListener('change', actualizarPrecios);
 document.getElementById('id_casino').dispatchEvent(new Event('change'));
+actualizarPrecios();
 </script>
 @endpush
 @endsection

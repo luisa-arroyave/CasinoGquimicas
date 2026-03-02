@@ -36,7 +36,12 @@ class ConsumoManualController extends Controller
         $horarios = HorarioConsumo::where('activo', true)->orderBy('hora_inicio')->get();
         $usuarios = Usuario::where('activo', true)->with('empresa')->orderBy('nombres')->get();
         $visitantes = Visitante::orderBy('nombre')->get();
-        return view('admin.consumos-manuales.create', compact('empresas', 'casinos', 'horarios', 'usuarios', 'visitantes'));
+        $precios = Precio::all()->keyBy(function ($p) {
+            return ($p->id_casino ?? '') . '-' . $p->id_horario;
+        })->map(function ($p) {
+            return ['precio_empleado' => (float) $p->precio_empleado, 'precio_casino' => (float) $p->precio_casino];
+        });
+        return view('admin.consumos-manuales.create', compact('empresas', 'casinos', 'horarios', 'usuarios', 'visitantes', 'precios'));
     }
 
     public function store(Request $request): RedirectResponse

@@ -19,6 +19,12 @@
     @endif
     <style>
         body { font-family: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Segoe UI', Roboto, sans-serif; }
+        input:not([type=checkbox]):not([type=radio]), select, textarea {
+            border-radius: 0.25rem !important;
+            min-height: 3rem !important;
+            padding: 0.625rem 1rem !important;
+            font-size: 1rem !important;
+        }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen flex items-center justify-center py-6 px-4 sm:py-12 sm:px-6 overflow-x-hidden antialiased">
@@ -44,8 +50,8 @@
             <form method="POST" action="{{ route('login') }}" class="space-y-5">
                 @csrf
                 <div>
-                    <label for="email" class="block text-sm font-medium text-slate-700 mb-2">Correo electrónico</label>
-                    <input type="email" name="email" id="email" value="{{ old('email') }}" required autofocus autocomplete="email" placeholder="tu@empresa.com"
+                    <label for="documento" class="block text-sm font-medium text-slate-700 mb-2">Número de documento</label>
+                    <input type="text" name="documento" id="documento" value="{{ old('documento') }}" required autofocus autocomplete="username" placeholder="Ej: 12345678"
                            class="block w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 placeholder-slate-400 shadow-sm transition focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500/25 min-h-[48px]">
                 </div>
                 <div>
@@ -61,11 +67,6 @@
                     Entrar
                 </button>
             </form>
-
-            <p class="mt-6 pt-6 text-center text-sm text-slate-500 border-t border-slate-100">
-                ¿No tienes cuenta?
-                <a href="{{ route('register') }}" class="font-medium text-slate-700 hover:text-slate-900 transition">Registrarse</a>
-            </p>
         </div>
     </div>
 </body>

@@ -12,7 +12,12 @@ class CasinoEscaneoController extends Controller
      */
     public function index(): View
     {
-        $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
+        $query = Casino::where('activo', true);
+        $user = auth()->user();
+        if ($user && $user->role === 'casino' && $user->id_casino_asignado) {
+            $query->where('id_casino', $user->id_casino_asignado);
+        }
+        $casinos = $query->orderBy('nombre')->get();
 
         return view('casino.escaneo-qr', [
             'casinos' => $casinos,

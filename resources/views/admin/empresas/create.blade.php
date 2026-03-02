@@ -20,6 +20,13 @@
                        class="block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 min-h-[48px] px-4 py-2.5">
                 @error('nombre')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
+            <div>
+                <label for="correos_cuenta_cobro" class="block text-sm font-medium text-slate-700 mb-1">Correos para cuenta de cobro (opcional)</label>
+                <textarea name="correos_cuenta_cobro" id="correos_cuenta_cobro" rows="2" placeholder="contabilidad@empresa.com, otro@empresa.com"
+                          class="block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 min-h-[48px] px-4 py-2.5">{{ old('correos_cuenta_cobro') }}</textarea>
+                <p class="mt-1 text-xs text-slate-500">Varios correos separados por coma, punto y coma o espacio. Se usarán al enviar la cuenta de cobro desde el casino.</p>
+                @error('correos_cuenta_cobro')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
         </div>
         <div class="flex items-center gap-2 min-h-[48px]">
             <input type="checkbox" name="activa" id="activa" value="1" {{ old('activa', true) ? 'checked' : '' }} class="h-5 w-5 rounded border-slate-300">

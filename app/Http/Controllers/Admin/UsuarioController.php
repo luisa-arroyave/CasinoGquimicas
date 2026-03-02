@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Casino;
 use App\Models\Empresa;
 use App\Models\Role;
+use App\Models\Sede;
 use App\Models\TipoUsuario;
 use App\Models\Usuario;
 use Illuminate\Http\RedirectResponse;
@@ -38,7 +40,9 @@ class UsuarioController extends Controller
         $empresas = Empresa::orderBy('nombre')->get();
         $roles = Role::orderBy('nombre')->get();
         $tipos = TipoUsuario::orderBy('nombre')->get();
-        return view('admin.usuarios.create', compact('empresas', 'roles', 'tipos'));
+        $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
+        $sedes = Sede::orderBy('nombre')->get();
+        return view('admin.usuarios.create', compact('empresas', 'roles', 'tipos', 'casinos', 'sedes'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -46,29 +50,49 @@ class UsuarioController extends Controller
         $valid = $request->validate([
             'documento' => 'required|string|max:50',
             'nombres' => 'required|string|max:255',
-            'email' => 'required|email',
+            'email' => 'nullable|email',
             'password' => 'nullable|string|min:6|confirmed',
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_rol' => 'required|exists:roles,id_rol',
             'id_tipo_usuario' => 'required|exists:tipos_usuario,id_tipo_usuario',
             'codigo_qr' => 'nullable|string|max:100',
             'activo' => 'boolean',
+            'empresas' => 'nullable|array',
+            'empresas.*' => 'exists:empresas,id_empresa',
+            'id_casino_asignado' => 'nullable|exists:casinos,id_casino',
+            'id_sede_principal' => 'nullable|exists:sedes,id_sede',
+            'sedes' => 'nullable|array',
+            'sedes.*' => 'exists:sedes,id_sede',
         ]);
         $valid['activo'] = $request->boolean('activo');
+        $rol = Role::find($valid['id_rol']);
+        if ($rol && $rol->nombre === 'casino') {
+            if (! $request->filled('id_casino_asignado')) {
+                return back()->withInput()->withErrors(['id_casino_asignado' => 'Debe asignar un casino para usuarios con rol casino.']);
+            }
+        } else {
+            $valid['id_casino_asignado'] = null;
+        }
         if (! empty($valid['password'])) {
             $valid['password_hash'] = Hash::make($valid['password']);
         }
-        unset($valid['password']);
-        Usuario::create($valid);
+        unset($valid['password'], $valid['empresas'], $valid['sedes']);
+        $usuario = Usuario::create($valid);
+        $this->syncEmpresasAcceso($usuario, $request->input('empresas', []));
+        $this->syncSedesAcceso($usuario, $request->input('sedes', []));
         return redirect()->route('admin.usuarios.index')->with('success', 'Usuario creado correctamente.');
     }
 
     public function edit(Usuario $usuario): View
     {
+        $usuario->load('empresasAcceso');
         $empresas = Empresa::orderBy('nombre')->get();
         $roles = Role::orderBy('nombre')->get();
         $tipos = TipoUsuario::orderBy('nombre')->get();
-        return view('admin.usuarios.edit', compact('usuario', 'empresas', 'roles', 'tipos'));
+        $usuario->load('sedesAcceso');
+        $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
+        $sedes = Sede::orderBy('nombre')->get();
+        return view('admin.usuarios.edit', compact('usuario', 'empresas', 'roles', 'tipos', 'casinos', 'sedes'));
     }
 
     public function update(Request $request, Usuario $usuario): RedirectResponse
@@ -76,21 +100,58 @@ class UsuarioController extends Controller
         $valid = $request->validate([
             'documento' => 'required|string|max:50',
             'nombres' => 'required|string|max:255',
-            'email' => 'required|email',
+            'email' => 'nullable|email',
             'password' => 'nullable|string|min:6|confirmed',
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_rol' => 'required|exists:roles,id_rol',
             'id_tipo_usuario' => 'required|exists:tipos_usuario,id_tipo_usuario',
             'codigo_qr' => 'nullable|string|max:100',
             'activo' => 'boolean',
+            'empresas' => 'nullable|array',
+            'empresas.*' => 'exists:empresas,id_empresa',
+            'id_casino_asignado' => 'nullable|exists:casinos,id_casino',
+            'id_sede_principal' => 'nullable|exists:sedes,id_sede',
+            'sedes' => 'nullable|array',
+            'sedes.*' => 'exists:sedes,id_sede',
         ]);
         $valid['activo'] = $request->boolean('activo');
+        $rol = Role::find($valid['id_rol']);
+        if ($rol && $rol->nombre === 'casino') {
+            if (! $request->filled('id_casino_asignado')) {
+                return back()->withInput()->withErrors(['id_casino_asignado' => 'Debe asignar un casino para usuarios con rol casino.']);
+            }
+        } else {
+            $valid['id_casino_asignado'] = null;
+        }
         if (! empty($valid['password'])) {
             $valid['password_hash'] = Hash::make($valid['password']);
         }
-        unset($valid['password']);
+        unset($valid['password'], $valid['empresas'], $valid['sedes']);
         $usuario->update($valid);
+        $this->syncEmpresasAcceso($usuario, $request->input('empresas', []));
+        $this->syncSedesAcceso($usuario, $request->input('sedes', []));
         return redirect()->route('admin.usuarios.index')->with('success', 'Usuario actualizado correctamente.');
+    }
+
+    /**
+     * Sincronizar empresas de acceso (solo para rol administrador o gestionhumana).
+     */
+    private function syncEmpresasAcceso(Usuario $usuario, array $empresasIds): void
+    {
+        $rol = $usuario->rol;
+        if (! $rol || ! in_array($rol->nombre, ['administrador', 'gestionhumana'], true)) {
+            $usuario->empresasAcceso()->sync([]);
+            return;
+        }
+        $usuario->empresasAcceso()->sync($empresasIds);
+    }
+
+    /**
+     * Sincronizar sedes adicionales donde puede registrar consumo (empleados en varias sedes).
+     */
+    private function syncSedesAcceso(Usuario $usuario, array $sedesIds): void
+    {
+        $usuario->sedesAcceso()->sync($sedesIds);
     }
 
     public function destroy(Usuario $usuario): RedirectResponse
