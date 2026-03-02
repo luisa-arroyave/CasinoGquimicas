@@ -20,7 +20,12 @@ class CuentaCobroController extends Controller
      */
     public function index(Request $request): View
     {
-        $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
+        $query = Casino::where('activo', true);
+        $user = $request->user();
+        if ($user && $user->role === 'casino' && $user->id_casino_asignado) {
+            $query->where('id_casino', $user->id_casino_asignado);
+        }
+        $casinos = $query->orderBy('nombre')->get();
         $cuentaGenerada = null;
         if ($request->has('cuenta_id')) {
             $cuentaGenerada = CuentaCobro::with('casino.empresa')->find($request->input('cuenta_id'));
@@ -47,7 +52,11 @@ class CuentaCobroController extends Controller
             'fecha_fin.required' => 'La fecha fin es obligatoria.',
         ]);
 
+        $user = $request->user();
         $idCasino = (int) $request->input('id_casino');
+        if ($user && $user->role === 'casino' && $user->id_casino_asignado) {
+            $idCasino = (int) $user->id_casino_asignado;
+        }
         $fechaInicio = $request->input('fecha_inicio');
         $fechaFin = $request->input('fecha_fin');
 

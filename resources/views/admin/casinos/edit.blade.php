@@ -4,38 +4,50 @@
 @section('page-title', 'Editar casino')
 
 @section('content')
-<div class="max-w-lg">
+<div class="max-w-4xl">
     <form action="{{ route('admin.casinos.update', $casino) }}" method="POST" class="space-y-4 bg-white p-6 rounded-xl border border-slate-200">
         @csrf
         @method('PUT')
-        <div>
-            <label for="NIT" class="block text-sm font-medium text-slate-700">NIT</label>
-            <input type="text" name="NIT" id="NIT" value="{{ old('NIT', $casino->NIT) }}" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
-            @error('NIT')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-        </div>
-        <div>
-            <label for="nombre" class="block text-sm font-medium text-slate-700">Nombre</label>
-            <input type="text" name="nombre" id="nombre" value="{{ old('nombre', $casino->nombre) }}" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
-            @error('nombre')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-        </div>
-        <div>
-            <label for="id_empresa" class="block text-sm font-medium text-slate-700">Empresa</label>
-            <select name="id_empresa" id="id_empresa" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
-                @foreach($empresas as $e)
-                    <option value="{{ $e->id_empresa }}" {{ old('id_empresa', $casino->id_empresa) == $e->id_empresa ? 'selected' : '' }}>{{ $e->nombre }}</option>
-                @endforeach
-            </select>
-            @error('id_empresa')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-        </div>
-        <div>
-            <label for="tipo_casino" class="block text-sm font-medium text-slate-700">Tipo casino</label>
-            <select name="tipo_casino" id="tipo_casino" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 min-h-[48px]">
-                <option value="">Seleccione...</option>
-                <option value="INTERNO" {{ old('tipo_casino', $casino->tipo_casino) === 'INTERNO' ? 'selected' : '' }}>INTERNO</option>
-                <option value="EXTERNO" {{ old('tipo_casino', $casino->tipo_casino) === 'EXTERNO' ? 'selected' : '' }}>EXTERNO</option>
-                <option value="DOMICILIO" {{ old('tipo_casino', $casino->tipo_casino) === 'DOMICILIO' ? 'selected' : '' }}>DOMICILIO</option>
-            </select>
-            @error('tipo_casino')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label for="NIT" class="block text-sm font-medium text-slate-700">NIT</label>
+                <input type="text" name="NIT" id="NIT" value="{{ old('NIT', $casino->NIT) }}" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                @error('NIT')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="nombre" class="block text-sm font-medium text-slate-700">Nombre</label>
+                <input type="text" name="nombre" id="nombre" value="{{ old('nombre', $casino->nombre) }}" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                @error('nombre')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="id_empresa" class="block text-sm font-medium text-slate-700">Empresa</label>
+                <select name="id_empresa" id="id_empresa" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                    @foreach($empresas as $e)
+                        <option value="{{ $e->id_empresa }}" {{ old('id_empresa', $casino->id_empresa) == $e->id_empresa ? 'selected' : '' }}>{{ $e->nombre }}</option>
+                    @endforeach
+                </select>
+                @error('id_empresa')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="id_sede" class="block text-sm font-medium text-slate-700">Sede</label>
+                <select name="id_sede" id="id_sede" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 min-h-[48px]">
+                    <option value="">— Sin sede —</option>
+                    @foreach($sedes as $s)
+                        <option value="{{ $s->id_sede }}" {{ old('id_sede', $casino->id_sede) == $s->id_sede ? 'selected' : '' }}>{{ $s->nombre }}</option>
+                    @endforeach
+                </select>
+                @error('id_sede')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="tipo_casino" class="block text-sm font-medium text-slate-700">Tipo casino</label>
+                <select name="tipo_casino" id="tipo_casino" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 min-h-[48px]">
+                    <option value="">Seleccione...</option>
+                    <option value="INTERNO" {{ old('tipo_casino', $casino->tipo_casino) === 'INTERNO' ? 'selected' : '' }}>INTERNO</option>
+                    <option value="EXTERNO" {{ old('tipo_casino', $casino->tipo_casino) === 'EXTERNO' ? 'selected' : '' }}>EXTERNO</option>
+                    <option value="DOMICILIO" {{ old('tipo_casino', $casino->tipo_casino) === 'DOMICILIO' ? 'selected' : '' }}>DOMICILIO</option>
+                </select>
+                @error('tipo_casino')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
         </div>
         <div class="flex items-center">
             <input type="checkbox" name="activo" id="activo" value="1" {{ old('activo', $casino->activo) ? 'checked' : '' }} class="rounded border-slate-300">

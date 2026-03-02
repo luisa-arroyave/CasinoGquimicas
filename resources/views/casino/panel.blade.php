@@ -5,59 +5,53 @@
 
 @section('content')
 <div class="space-y-6" x-data="panelCasino()" x-init="init()">
-    {{-- Filtros: casino y rango de fechas --}}
+    {{-- Cabecera: casino actual y fecha (día de la semana) --}}
     <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <form method="get" action="{{ route('casino.panel') }}" class="flex flex-wrap items-end gap-4" @submit.prevent="consultar()">
+        <div class="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-3">
             <div>
-                <label for="id_casino" class="block text-sm font-medium text-slate-700 mb-1">Casino / Punto</label>
-                <select name="id_casino" id="id_casino" x-model="idCasino" @change="actualizarDatos()"
-                        class="rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-slate-500 focus:ring-2 focus:ring-slate-500 min-w-[200px]">
-                    @foreach($casinos as $c)
-                        <option value="{{ $c->id_casino }}" {{ $casino && $casino->id_casino == $c->id_casino ? 'selected' : '' }}>{{ $c->nombre }}</option>
-                    @endforeach
-                </select>
+                <p class="text-sm font-medium text-slate-500">Casino / Punto</p>
+                <p class="mt-1 text-base font-semibold text-slate-800">
+                    {{ $casino?->nombre ?? '—' }}
+                </p>
             </div>
             <div>
-                <label for="fecha_desde" class="block text-sm font-medium text-slate-700 mb-1">Desde</label>
-                <input type="date" name="fecha_desde" id="fecha_desde" x-model="fechaDesde"
-                       class="rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-slate-500 focus:ring-2 focus:ring-slate-500">
+                <p class="text-sm font-medium text-slate-500">Fecha</p>
+                <p class="mt-1 text-base font-semibold text-slate-800">
+                    {{ \Carbon\Carbon::parse($fecha_desde)->translatedFormat('l d \\d\\e F \\d\\e Y') }}
+                </p>
             </div>
-            <div>
-                <label for="fecha_hasta" class="block text-sm font-medium text-slate-700 mb-1">Hasta</label>
-                <input type="date" name="fecha_hasta" id="fecha_hasta" x-model="fechaHasta"
-                       class="rounded-lg border border-slate-300 px-4 py-2 text-slate-900 focus:border-slate-500 focus:ring-2 focus:ring-slate-500">
-            </div>
-            <button type="submit" class="px-4 py-2 rounded-lg bg-slate-800 text-white font-medium hover:bg-slate-700">
-                Consultar
-            </button>
-            <button type="button" @click="hoy()" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 font-medium hover:bg-slate-50">
-                Hoy
-            </button>
-        </form>
+        </div>
     </div>
 
-    {{-- Contador de vales y totales diarios --}}
-    <div class="grid gap-4 sm:grid-cols-3">
+    {{-- Marcador de consumos ENTREGADOS (período seleccionado) --}}
+    <div class="grid gap-4 sm:grid-cols-2">
         <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p class="text-sm font-medium text-slate-500">Vales del período</p>
+            <p class="text-sm font-medium text-slate-500">CONTADOR</p>
             <p class="mt-1 text-3xl font-bold text-slate-800" x-text="totales.cantidad_vales">0</p>
         </div>
         <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p class="text-sm font-medium text-slate-500">Total valor empleado</p>
-            <p class="mt-1 text-2xl font-bold text-emerald-600" x-text="formatPeso(totales.total_precio_empleado)">$ 0</p>
-        </div>
-        <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <p class="text-sm font-medium text-slate-500">Total valor casino</p>
-            <p class="mt-1 text-2xl font-bold text-slate-800" x-text="formatPeso(totales.total_precio_casino)">$ 0</p>
+            <p class="mt-1 text-2xl font-bold text-emerald-600" x-text="formatPeso(totales.total_precio_casino)">$ 0</p>
         </div>
     </div>
 
     {{-- Consumos en tiempo real --}}
     <div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between relative">
             <h2 class="text-lg font-semibold text-slate-800">Consumos del período</h2>
-            <span class="text-sm text-slate-500" x-show="esHoy" x-transition>Actualización automática cada 30 s</span>
-            <button type="button" @click="actualizarDatos()" class="text-sm text-slate-600 hover:text-slate-800 underline">Actualizar</button>
+            <div class="flex items-center gap-4">
+                <span class="text-sm text-slate-500" x-show="esHoy" x-transition>Actualización automática cada 3 s</span>
+                <div class="flex items-center gap-1 text-xs text-slate-500">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full"
+                          :class="lectorActivo ? 'bg-emerald-500' : 'bg-slate-400'"></span>
+                    <span x-text="lectorActivo ? 'Lector activo' : 'Lector inactivo'"></span>
+                </div>
+                <button type="button" @click="actualizarDatos()" class="text-sm text-slate-600 hover:text-slate-800 underline">Actualizar</button>
+            </div>
+            {{-- Input oculto para lector QR como teclado --}}
+            <input type="text" id="input-qr-panel"
+                   class="absolute -left-[9999px] top-0 opacity-0"
+                   autocomplete="off">
         </div>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-slate-200">
@@ -65,12 +59,8 @@
                     <tr>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Fecha</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Hora</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Horario</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Persona</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Nombre</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Empresa</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">Estado</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">P. empleado</th>
-                        <th class="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase">P. casino</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200" x-ref="tbody">
@@ -78,17 +68,13 @@
                     <tr class="bg-white hover:bg-slate-50">
                         <td class="px-6 py-3 text-sm text-slate-900">{{ $c->fecha_consumo?->format('d/m/Y') }}</td>
                         <td class="px-6 py-3 text-sm text-slate-900">{{ $c->hora_consumo ? (is_object($c->hora_consumo) ? $c->hora_consumo->format('H:i') : substr($c->hora_consumo, 0, 5)) : '—' }}</td>
-                        <td class="px-6 py-3 text-sm text-slate-600">{{ $c->horarioConsumo?->nombre ?? '—' }}</td>
                         <td class="px-6 py-3 text-sm text-slate-900">{{ $c->usuario ? $c->usuario->nombres . ' (' . $c->usuario->documento . ')' : ($c->visitante ? $c->visitante->nombre : '—') }}</td>
                         <td class="px-6 py-3 text-sm text-slate-600">{{ $c->empresa?->nombre ?? '—' }}</td>
-                        <td class="px-6 py-3"><span class="px-2 py-0.5 text-xs font-medium rounded {{ $c->estado === 'ENTREGADO' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800' }}">{{ $c->estado }}</span></td>
-                        <td class="px-6 py-3 text-sm text-right text-slate-900">$ {{ number_format($c->precio_empleado, 0, ',', '.') }}</td>
-                        <td class="px-6 py-3 text-sm text-right text-slate-900">$ {{ number_format($c->precio_casino, 0, ',', '.') }}</td>
                     </tr>
                     @endforeach
                     @if($consumos->isEmpty())
                     <tr>
-                        <td colspan="8" class="px-6 py-8 text-center text-slate-500">No hay consumos en el período seleccionado.</td>
+                        <td colspan="4" class="px-6 py-8 text-center text-slate-500">No hay consumos en el período seleccionado.</td>
                     </tr>
                     @endif
                 </tbody>
@@ -102,7 +88,9 @@
 <script>
 function panelCasino() {
     const urlDatos = '{{ url("/casino/panel/datos") }}';
+    const urlValidarQr = '{{ url("/api/consumo/validar-qr") }}';
     const hoyStr = new Date().toISOString().slice(0, 10);
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
     return {
         idCasino: '{{ $casino?->id_casino ?? "" }}',
         fechaDesde: '{{ $fecha_desde }}',
@@ -114,12 +102,34 @@ function panelCasino() {
         },
         consumos: [],
         intervalo: null,
+        lectorActivo: false,
+        lectorTimeout: null,
         get esHoy() {
             return this.fechaDesde === hoyStr && this.fechaHasta === hoyStr;
         },
         init() {
+            const self = this;
             if (this.esHoy && this.idCasino) {
-                this.intervalo = setInterval(() => this.actualizarDatos(), 30000);
+                this.intervalo = setInterval(() => this.actualizarDatos(), 3000);
+            }
+
+            // Soporte para lector QR conectado como teclado: escribe en input oculto y envía Enter
+            const inputQrPanel = document.getElementById('input-qr-panel');
+            if (inputQrPanel) {
+                const focusInput = () => inputQrPanel.focus();
+                focusInput();
+                inputQrPanel.addEventListener('blur', () => {
+                    setTimeout(focusInput, 50);
+                });
+                inputQrPanel.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const valor = inputQrPanel.value;
+                        inputQrPanel.value = '';
+                        if (!valor || !valor.trim()) return;
+                        self.enviarQr(valor);
+                    }
+                });
             }
         },
         formatPeso(n) {
@@ -149,14 +159,48 @@ function panelCasino() {
         renderTabla() {
             const tbody = this.$refs.tbody;
             if (!tbody) return;
-            const fmt = (n) => (typeof n === 'number' ? n : parseFloat(n)).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
             const rows = this.consumos.length ? this.consumos.map(c => {
                 const fecha = c.fecha_consumo ? c.fecha_consumo.split('-').reverse().join('/') : '—';
                 const hora = c.hora_consumo ? String(c.hora_consumo).substr(0, 5) : '—';
-                const estadoClass = c.estado === 'ENTREGADO' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800';
-                return `<tr class="bg-white hover:bg-slate-50"><td class="px-6 py-3 text-sm text-slate-900">${fecha}</td><td class="px-6 py-3 text-sm text-slate-900">${hora}</td><td class="px-6 py-3 text-sm text-slate-600">${c.horario || '—'}</td><td class="px-6 py-3 text-sm text-slate-900">${c.persona || '—'}</td><td class="px-6 py-3 text-sm text-slate-600">${c.empresa || '—'}</td><td class="px-6 py-3"><span class="px-2 py-0.5 text-xs font-medium rounded ${estadoClass}">${c.estado || '—'}</span></td><td class="px-6 py-3 text-sm text-right text-slate-900">$ ${fmt(c.precio_empleado)}</td><td class="px-6 py-3 text-sm text-right text-slate-900">$ ${fmt(c.precio_casino)}</td></tr>`;
-            }).join('') : '<tr><td colspan="8" class="px-6 py-8 text-center text-slate-500">No hay consumos en el período seleccionado.</td></tr>';
+                const nombre = c.persona || '—';
+                const empresa = c.empresa || '—';
+                return `<tr class="bg-white hover:bg-slate-50"><td class="px-6 py-3 text-sm text-slate-900">${fecha}</td><td class="px-6 py-3 text-sm text-slate-900">${hora}</td><td class="px-6 py-3 text-sm text-slate-900">${nombre}</td><td class="px-6 py-3 text-sm text-slate-600">${empresa}</td></tr>`;
+            }).join('') : '<tr><td colspan="4" class="px-6 py-8 text-center text-slate-500">No hay consumos en el período seleccionado.</td></tr>';
             tbody.innerHTML = rows;
+        },
+        enviarQr(codigoQr) {
+            if (!this.idCasino) return;
+            const payload = {
+                codigo_qr: String(codigoQr).trim(),
+                id_casino: parseInt(this.idCasino, 10)
+            };
+            fetch(urlValidarQr, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data && data.ok) {
+                    // Marcar lector como activo cuando se valide correctamente un QR
+                    this.lectorActivo = true;
+                    if (this.lectorTimeout) clearTimeout(this.lectorTimeout);
+                    this.lectorTimeout = setTimeout(() => { this.lectorActivo = false; }, 5000);
+
+                    // Refrescar tabla y totales inmediatamente al validar el QR
+                    this.actualizarDatos();
+                } else {
+                    console.warn('Error al validar QR en panel:', data);
+                }
+            })
+            .catch(err => {
+                console.error('Error de red al validar QR en panel:', err);
+            });
         }
     };
 }

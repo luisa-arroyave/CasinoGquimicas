@@ -16,7 +16,7 @@ class SolicitarConsumoController extends Controller
     /**
      * Formulario para solicitar consumo. Tipo de comida = horario vigente por hora. Casino = de la empresa del usuario.
      */
-    public function create(): View
+    public function create(Request $request): View
     {
         $usuarioEmpresarial = auth()->user();
 
@@ -25,12 +25,27 @@ class SolicitarConsumoController extends Controller
         }
 
         $horarioVigente = HorarioConsumo::horarioVigente();
-        $casinos = Casino::where('activo', true)
-            ->where('id_empresa', $usuarioEmpresarial->id_empresa)
-            ->orderBy('nombre')
-            ->get();
+
+        $sedesPermitidasIds = $usuarioEmpresarial->sedes_permitidas_ids;
+        $sedeElegida = null;
+        if ($request->filled('id_sede') && in_array((int) $request->id_sede, $sedesPermitidasIds, true)) {
+            $sedeElegida = (int) $request->id_sede;
+        }
+        $sedeIdsParaCasinos = ! empty($sedesPermitidasIds)
+            ? ($sedeElegida ? [$sedeElegida] : $sedesPermitidasIds)
+            : [];
+        $casinos = Casino::where('activo', true);
+        if (! empty($sedeIdsParaCasinos)) {
+            $casinos->whereIn('id_sede', $sedeIdsParaCasinos);
+        } else {
+            $casinos->where('id_empresa', $usuarioEmpresarial->id_empresa);
+        }
+        $casinos = $casinos->orderBy('nombre')->get();
 
         $casinoPorDefecto = $casinos->count() === 1 ? $casinos->first() : null;
+        if (! $casinoPorDefecto && ! $sedeElegida && $usuarioEmpresarial->id_sede_principal && $casinos->isNotEmpty()) {
+            $casinoPorDefecto = $casinos->firstWhere('id_sede', $usuarioEmpresarial->id_sede_principal) ?? $casinos->first();
+        }
         $horariosDisponibles = HorarioConsumo::where('activo', true)->orderBy('hora_inicio')->get();
 
         // Consumo ya solicitado para el horario vigente (código activo según horario de la comida)
@@ -48,6 +63,10 @@ class SolicitarConsumoController extends Controller
             }
         }
 
+        $sedesParaOtraSede = count($sedesPermitidasIds) > 1 && $horarioVigente
+            ? \App\Models\Sede::whereIn('id_sede', $sedesPermitidasIds)->orderBy('nombre')->get()
+            : collect([]);
+
         return view('solicitar-consumo.create', [
             'casinos' => $casinos,
             'usuarioEmpresarial' => $usuarioEmpresarial,
@@ -56,6 +75,8 @@ class SolicitarConsumoController extends Controller
             'horariosDisponibles' => $horariosDisponibles,
             'consumoActivo' => $consumoActivo,
             'codigoQrActivo' => $codigoQrActivo,
+            'sedesParaOtraSede' => $sedesParaOtraSede,
+            'sedeElegida' => $sedeElegida,
         ]);
     }
 
@@ -75,9 +96,17 @@ class SolicitarConsumoController extends Controller
             'direccion_entrega' => 'nullable|string|max:500',
         ]);
 
-        $casino = Casino::where('activo', true)
-            ->where('id_empresa', $usuarioEmpresarial->id_empresa)
-            ->findOrFail($valid['id_casino']);
+        $casino = Casino::where('activo', true)->findOrFail($valid['id_casino']);
+        $sedesPermitidasIds = $usuarioEmpresarial->sedes_permitidas_ids;
+        if (! empty($sedesPermitidasIds)) {
+            if (! in_array($casino->id_sede, $sedesPermitidasIds)) {
+                abort(403, 'No puede registrar consumo en ese punto de entrega.');
+            }
+        } else {
+            if ($casino->id_empresa != $usuarioEmpresarial->id_empresa) {
+                abort(403, 'No puede registrar consumo en ese punto de entrega.');
+            }
+        }
 
         $esDomicilio = strtolower(trim($casino->tipo_casino ?? '')) === 'domicilio';
 

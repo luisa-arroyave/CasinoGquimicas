@@ -30,11 +30,12 @@
             <div class="space-y-3">
                 <div>
                     <label for="password" class="block text-sm font-medium text-slate-700 mb-1">Nueva contraseña (opcional)</label>
-                    <input type="password" name="password" id="password" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                    <p class="text-xs text-slate-500 mb-1">Deje en blanco para mantener la contraseña actual.</p>
+                    <input type="password" name="password" id="password" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500" autocomplete="new-password">
                 </div>
                 <div>
                     <label for="password_confirmation" class="block text-sm font-medium text-slate-700 mb-1">Confirmar contraseña</label>
-                    <input type="password" name="password_confirmation" id="password_confirmation" placeholder="Repetir" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                    <input type="password" name="password_confirmation" id="password_confirmation" placeholder="Solo si cambia la contraseña" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500" autocomplete="new-password">
                 </div>
                 @error('password')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
@@ -86,6 +87,48 @@
             </div>
         </div>
 
+        {{-- Casino asignado (solo rol casino) --}}
+        <div id="bloque-casino-asignado" class="hidden rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <p class="text-sm font-medium text-slate-700 mb-2">Casino asignado</p>
+            <p class="text-xs text-slate-500 mb-3">Usuario con rol casino solo verá datos de este casino.</p>
+            <div class="max-w-sm">
+                <select name="id_casino_asignado" id="id_casino_asignado" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                    <option value="">— Seleccione un casino —</option>
+                    @foreach($casinos as $c)
+                        <option value="{{ $c->id_casino }}" {{ old('id_casino_asignado', $usuario->id_casino_asignado) == $c->id_casino ? 'selected' : '' }}>{{ $c->nombre }}</option>
+                    @endforeach
+                </select>
+                @error('id_casino_asignado')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+        </div>
+
+        {{-- Sede principal y sedes adicionales (empleados) --}}
+        <div id="bloque-sede" class="hidden rounded-xl border border-slate-200 bg-slate-50/50 p-4 space-y-4">
+            <div>
+                <label for="id_sede_principal" class="block text-sm font-medium text-slate-700 mb-1">Sede principal</label>
+                <p class="text-xs text-slate-500 mb-2">Sede donde suele estar el empleado.</p>
+                <select name="id_sede_principal" id="id_sede_principal" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 max-w-sm">
+                    <option value="">— Sin sede —</option>
+                    @foreach($sedes as $s)
+                        <option value="{{ $s->id_sede }}" {{ old('id_sede_principal', $usuario->id_sede_principal) == $s->id_sede ? 'selected' : '' }}>{{ $s->nombre }}</option>
+                    @endforeach
+                </select>
+                @error('id_sede_principal')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            @php $sedesAccesoIds = old('sedes', $usuario->sedesAcceso->pluck('id_sede')->toArray()); @endphp
+            <div>
+                <p class="text-sm font-medium text-slate-700 mb-2">Sedes adicionales (registrar consumo en otra sede)</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                    @foreach($sedes as $s)
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="sedes[]" value="{{ $s->id_sede }}" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500" {{ in_array($s->id_sede, $sedesAccesoIds) ? 'checked' : '' }}>
+                            <span class="text-sm text-slate-700">{{ $s->nombre }}</span>
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label for="codigo_qr" class="block text-sm font-medium text-slate-700 mb-1">Código QR (opcional)</label>
@@ -109,6 +152,9 @@
 document.addEventListener('DOMContentLoaded', function() {
     var sel = document.getElementById('id_rol');
     var bloque = document.getElementById('bloque-empresas-acceso');
+    var bloqueCasino = document.getElementById('bloque-casino-asignado');
+    var selectCasino = document.getElementById('id_casino_asignado');
+    var bloqueSede = document.getElementById('bloque-sede');
     function toggle() {
         var opt = sel.options[sel.selectedIndex];
         var nombre = opt ? (opt.getAttribute('data-role-nombre') || '') : '';
@@ -116,7 +162,25 @@ document.addEventListener('DOMContentLoaded', function() {
             bloque.classList.remove('hidden');
         } else {
             bloque.classList.add('hidden');
-            bloque.querySelectorAll('input[name="empresas[]"]').forEach(function(cb) { cb.checked = false; });
+            if (bloque) bloque.querySelectorAll('input[name="empresas[]"]').forEach(function(cb) { cb.checked = false; });
+        }
+        if (bloqueCasino) {
+            if (nombre === 'casino') {
+                bloqueCasino.classList.remove('hidden');
+            } else {
+                bloqueCasino.classList.add('hidden');
+                if (selectCasino) selectCasino.value = '';
+            }
+        }
+        if (bloqueSede) {
+            if (nombre === 'empleado') {
+                bloqueSede.classList.remove('hidden');
+            } else {
+                bloqueSede.classList.add('hidden');
+                var sedePrincipal = document.getElementById('id_sede_principal');
+                if (sedePrincipal) sedePrincipal.value = '';
+                if (bloqueSede) bloqueSede.querySelectorAll('input[name="sedes[]"]').forEach(function(cb) { cb.checked = false; });
+            }
         }
     }
     sel.addEventListener('change', toggle);

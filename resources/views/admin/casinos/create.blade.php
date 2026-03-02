@@ -28,6 +28,16 @@
                 @error('id_empresa')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
             <div>
+                <label for="id_sede" class="block text-sm font-medium text-slate-700">Sede</label>
+                <select name="id_sede" id="id_sede" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 min-h-[48px]">
+                    <option value="">— Sin sede —</option>
+                    @foreach($sedes as $s)
+                        <option value="{{ $s->id_sede }}" {{ old('id_sede') == $s->id_sede ? 'selected' : '' }}>{{ $s->nombre }}</option>
+                    @endforeach
+                </select>
+                @error('id_sede')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div>
                 <label for="tipo_casino" class="block text-sm font-medium text-slate-700">Tipo casino</label>
                 <select name="tipo_casino" id="tipo_casino" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 min-h-[48px]">
                     <option value="">Seleccione...</option>

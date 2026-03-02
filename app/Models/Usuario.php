@@ -26,6 +26,8 @@ class Usuario extends Authenticatable
         'email',
         'password_hash',
         'id_empresa',
+        'id_casino_asignado',
+        'id_sede_principal',
         'id_rol',
         'id_tipo_usuario',
         'codigo_qr',
@@ -45,6 +47,44 @@ class Usuario extends Authenticatable
     public function empresa(): BelongsTo
     {
         return $this->belongsTo(Empresa::class, 'id_empresa', 'id_empresa');
+    }
+
+    /**
+     * Casino asignado (solo para usuarios con rol casino). Null para el resto.
+     */
+    public function casinoAsignado(): BelongsTo
+    {
+        return $this->belongsTo(Casino::class, 'id_casino_asignado', 'id_casino');
+    }
+
+    /**
+     * Sede donde el usuario suele estar (empleados: para mostrar casinos de esa sede).
+     */
+    public function sedePrincipal(): BelongsTo
+    {
+        return $this->belongsTo(Sede::class, 'id_sede_principal', 'id_sede');
+    }
+
+    /**
+     * Sedes adicionales donde puede registrar consumo (p. ej. externos en varias oficinas).
+     */
+    public function sedesAcceso(): BelongsToMany
+    {
+        return $this->belongsToMany(Sede::class, 'sede_usuario', 'id_usuario', 'id_sede');
+    }
+
+    /**
+     * IDs de sedes donde puede solicitar consumo: sede principal + sedes de acceso.
+     */
+    public function getSedesPermitidasIdsAttribute(): array
+    {
+        $ids = [];
+        if ($this->id_sede_principal) {
+            $ids[] = $this->id_sede_principal;
+        }
+        // Usar columna calificada para evitar ambigüedad entre sedes.id_sede y sede_usuario.id_sede
+        $ids = array_merge($ids, $this->sedesAcceso()->pluck('sedes.id_sede')->toArray());
+        return array_values(array_unique($ids));
     }
 
     /**

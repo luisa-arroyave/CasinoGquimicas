@@ -15,8 +15,17 @@ class CasinoPanelController extends Controller
      */
     public function index(Request $request): View
     {
-        $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
-        $idCasino = $request->input('id_casino', $casinos->first()?->id_casino);
+        $user = $request->user();
+        $query = Casino::where('activo', true);
+        if ($user && $user->role === 'casino' && $user->id_casino_asignado) {
+            $query->where('id_casino', $user->id_casino_asignado);
+        }
+        $casinos = $query->orderBy('nombre')->get();
+        $idCasino = $request->input('id_casino');
+        if ($user && $user->role === 'casino' && $user->id_casino_asignado) {
+            $idCasino = $user->id_casino_asignado;
+        }
+        $idCasino = $idCasino ?? $casinos->first()?->id_casino;
         $fechaDesde = $request->input('fecha_desde', Carbon::today()->toDateString());
         $fechaHasta = $request->input('fecha_hasta', Carbon::today()->toDateString());
 
@@ -26,15 +35,16 @@ class CasinoPanelController extends Controller
         }
         $idCasino = $casino?->id_casino;
 
-        $query = RegistroConsumo::query()
+        $consumos = RegistroConsumo::query()
             ->where('id_casino', $idCasino)
+            ->where('estado', 'ENTREGADO')
             ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta])
             ->with(['usuario', 'visitante', 'horarioConsumo', 'empresa'])
             ->orderBy('fecha_consumo')
-            ->orderBy('hora_consumo');
+            ->orderBy('hora_consumo')
+            ->get();
 
-        $consumos = $query->get();
-
+        // Totales del período (solo consumos ENTREGADOS)
         $totales = [
             'cantidad_vales' => $consumos->count(),
             'total_precio_empleado' => $consumos->sum('precio_empleado'),
@@ -62,18 +72,24 @@ class CasinoPanelController extends Controller
             'fecha_hasta' => ['nullable', 'date', 'after_or_equal:fecha_desde'],
         ]);
 
+        $user = $request->user();
         $idCasino = (int) $request->input('id_casino');
+        if ($user && $user->role === 'casino' && $user->id_casino_asignado) {
+            $idCasino = (int) $user->id_casino_asignado;
+        }
         $fechaDesde = $request->input('fecha_desde', Carbon::today()->toDateString());
         $fechaHasta = $request->input('fecha_hasta', Carbon::today()->toDateString());
 
         $consumos = RegistroConsumo::query()
             ->where('id_casino', $idCasino)
+            ->where('estado', 'ENTREGADO')
             ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta])
             ->with(['usuario:id_usuario,nombres,documento', 'visitante:id_visitante,nombre,documento', 'horarioConsumo:id_horario,nombre', 'empresa:id_empresa,nombre'])
             ->orderBy('fecha_consumo')
             ->orderBy('hora_consumo')
             ->get();
 
+        // Totales del período (solo consumos ENTREGADOS)
         $totales = [
             'cantidad_vales' => $consumos->count(),
             'total_precio_empleado' => round($consumos->sum('precio_empleado'), 2),

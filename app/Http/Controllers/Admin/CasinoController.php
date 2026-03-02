@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Casino;
 use App\Models\Empresa;
 use App\Models\HorarioConsumo;
+use App\Models\Sede;
 use App\Models\Precio;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,8 +23,9 @@ class CasinoController extends Controller
     public function create(): View
     {
         $empresas = Empresa::where('activa', true)->orderBy('nombre')->get();
+        $sedes = Sede::orderBy('nombre')->get();
         $horarios = HorarioConsumo::where('activo', true)->orderBy('hora_inicio')->get();
-        return view('admin.casinos.create', compact('empresas', 'horarios'));
+        return view('admin.casinos.create', compact('empresas', 'sedes', 'horarios'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -32,6 +34,7 @@ class CasinoController extends Controller
             'NIT' => 'required|string|max:20',
             'nombre' => 'required|string|max:255',
             'id_empresa' => 'required|exists:empresas,id_empresa',
+            'id_sede' => 'nullable|exists:sedes,id_sede',
             'tipo_casino' => 'nullable|string|max:50',
             'activo' => 'boolean',
         ]);
@@ -46,9 +49,10 @@ class CasinoController extends Controller
     public function edit(Casino $casino): View
     {
         $empresas = Empresa::where('activa', true)->orderBy('nombre')->get();
+        $sedes = Sede::orderBy('nombre')->get();
         $horarios = HorarioConsumo::where('activo', true)->orderBy('hora_inicio')->get();
         $casino->load('precios.horarioConsumo');
-        return view('admin.casinos.edit', compact('casino', 'empresas', 'horarios'));
+        return view('admin.casinos.edit', compact('casino', 'empresas', 'sedes', 'horarios'));
     }
 
     public function update(Request $request, Casino $casino): RedirectResponse
@@ -57,6 +61,7 @@ class CasinoController extends Controller
             'NIT' => 'required|string|max:20',
             'nombre' => 'required|string|max:255',
             'id_empresa' => 'required|exists:empresas,id_empresa',
+            'id_sede' => 'nullable|exists:sedes,id_sede',
             'tipo_casino' => 'nullable|string|max:50',
             'activo' => 'boolean',
         ]);

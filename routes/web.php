@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\EmpresaController;
 use App\Http\Controllers\Admin\HorarioController;
 use App\Http\Controllers\Admin\PrecioController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\SedeController;
 use App\Http\Controllers\Admin\TipoUsuarioController;
 use App\Http\Controllers\Admin\UsuarioController as AdminUsuarioController;
 use App\Http\Controllers\Admin\VisitanteController;
@@ -110,6 +111,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:administrador')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', [AdminController::class, 'index'])->name('index');
         Route::resource('empresas', EmpresaController::class)->parameters(['empresa' => 'empresa']);
+        Route::resource('sedes', SedeController::class)->parameters(['sede' => 'sede']);
         Route::resource('casinos', AdminCasinoController::class)->parameters(['casino' => 'casino']);
         Route::resource('horarios', HorarioController::class)->parameters(['horario' => 'horario']);
         Route::resource('tipos-usuario', TipoUsuarioController::class)->parameters(['tipo_usuario' => 'tipoUsuario']);

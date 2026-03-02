@@ -75,6 +75,54 @@ class DashboardController extends Controller
             ]);
         }
 
+        if ($role === 'casino') {
+            $user = auth()->user();
+            $hoy = Carbon::now();
+            $mesAnterior = $hoy->copy()->subMonth();
+            $qBase = RegistroConsumo::query();
+            if ($user && $user->id_casino_asignado) {
+                $qBase->where('id_casino', $user->id_casino_asignado);
+            }
+            $consumoMesActual = (clone $qBase)
+                ->whereYear('fecha_consumo', $hoy->year)
+                ->whereMonth('fecha_consumo', $hoy->month)
+                ->count();
+            $consumoMesAnterior = (clone $qBase)
+                ->whereYear('fecha_consumo', $mesAnterior->year)
+                ->whereMonth('fecha_consumo', $mesAnterior->month)
+                ->count();
+            $valorTotalAlmuerzosMesActual = (clone $qBase)
+                ->whereYear('fecha_consumo', $hoy->year)
+                ->whereMonth('fecha_consumo', $hoy->month)
+                ->sum('precio_casino');
+
+            $inicioSemana = $hoy->copy()->startOfWeek();
+            $finSemana = $hoy->copy()->endOfWeek();
+            $consumosPorDia = (clone $qBase)
+                ->whereBetween('fecha_consumo', [$inicioSemana->toDateString(), $finSemana->toDateString()])
+                ->selectRaw('fecha_consumo, COUNT(*) as total')
+                ->groupBy('fecha_consumo')
+                ->pluck('total', 'fecha_consumo')
+                ->toArray();
+            $semanaLabels = [];
+            $semanaData = [];
+            for ($fecha = $inicioSemana->copy(); $fecha->lte($finSemana); $fecha->addDay()) {
+                $key = $fecha->toDateString();
+                $semanaLabels[] = $fecha->translatedFormat('D d/m');
+                $semanaData[] = (int) ($consumosPorDia[$key] ?? 0);
+            }
+
+            return view($view, [
+                'consumoMesActual'              => $consumoMesActual,
+                'consumoMesAnterior'            => $consumoMesAnterior,
+                'valorTotalAlmuerzosMesActual'  => (float) $valorTotalAlmuerzosMesActual,
+                'mesActual'                     => $hoy->translatedFormat('F Y'),
+                'mesAnterior'                   => $mesAnterior->translatedFormat('F Y'),
+                'semanaLabels'                  => $semanaLabels,
+                'semanaData'                    => $semanaData,
+            ]);
+        }
+
         return view($view);
     }
 }

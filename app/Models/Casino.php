@@ -23,6 +23,7 @@ class Casino extends Model
         'NIT',
         'nombre',
         'id_empresa',
+        'id_sede',
         'tipo_casino',
         'activo',
     ];
@@ -32,11 +33,19 @@ class Casino extends Model
     ];
 
     /**
-     * Empresa a la que pertenece el casino.
+     * Empresa que opera el casino.
      */
     public function empresa(): BelongsTo
     {
         return $this->belongsTo(Empresa::class, 'id_empresa', 'id_empresa');
+    }
+
+    /**
+     * Sede donde está ubicado el casino (lugar físico compartido por varias empresas).
+     */
+    public function sede(): BelongsTo
+    {
+        return $this->belongsTo(Sede::class, 'id_sede', 'id_sede');
     }
 
     /**
