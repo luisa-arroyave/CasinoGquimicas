@@ -59,7 +59,7 @@ class SolicitarConsumoController extends Controller
                 ->where('estado', 'SOLICITADO')
                 ->first();
             if ($consumoActivo) {
-                $codigoQrActivo = 'CONSUMO:' . $consumoActivo->id_consumo;
+                $codigoQrActivo = 'CONSUMO-' . $consumoActivo->id_consumo;
             }
         }
 
@@ -141,12 +141,21 @@ class SolicitarConsumoController extends Controller
         $precioEmpleado = $precio ? (float) $precio->precio_empleado : 0;
         $precioCasino = $precio ? (float) $precio->precio_casino : 0;
 
+        $usuarioEmpresarial->load(['rol', 'tipoUsuario', 'empresa']);
+        $empresa = $usuarioEmpresarial->empresa;
+
         $consumo = RegistroConsumo::create([
             'id_usuario' => $usuarioEmpresarial->id_usuario,
             'id_visitante' => null,
             'id_empresa' => $usuarioEmpresarial->id_empresa,
             'id_casino' => $casino->id_casino,
             'id_horario' => $horario->id_horario,
+            'documento' => $usuarioEmpresarial->documento,
+            'nombres_consumidor' => $usuarioEmpresarial->nombres,
+            'tipo_usuario_nombre' => $usuarioEmpresarial->rol?->nombre ?? $usuarioEmpresarial->tipoUsuario?->nombre ?? null,
+            'empresa_nombre' => $empresa?->nombre,
+            'casino_nombre' => $casino->nombre,
+            'horario_nombre' => $horario->nombre,
             'fecha_consumo' => $hoy,
             'hora_consumo' => Carbon::now()->format('H:i:s'),
             'precio_empleado' => $precioEmpleado,
@@ -174,7 +183,7 @@ class SolicitarConsumoController extends Controller
             return redirect()->route('solicitar-consumo.create')->with('info', 'Este consumo ya fue validado en el punto de entrega.');
         }
 
-        $codigoQr = 'CONSUMO:' . $consumo->id_consumo;
+        $codigoQr = 'CONSUMO-' . $consumo->id_consumo;
         $consumo->load(['casino', 'horarioConsumo']);
 
         return view('solicitar-consumo.mostrar-qr', [

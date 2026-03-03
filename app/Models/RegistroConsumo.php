@@ -21,6 +21,12 @@ class RegistroConsumo extends Model
         'id_empresa',
         'id_casino',
         'id_horario',
+        'documento',
+        'nombres_consumidor',
+        'tipo_usuario_nombre',
+        'empresa_nombre',
+        'casino_nombre',
+        'horario_nombre',
         'fecha_consumo',
         'hora_consumo',
         'precio_casino',
@@ -85,5 +91,60 @@ class RegistroConsumo extends Model
     public function registradoPor(): BelongsTo
     {
         return $this->belongsTo(Usuario::class, 'registrado_por', 'id_usuario');
+    }
+
+    /**
+     * Nombre del consumidor (preferir snapshot histórico).
+     */
+    public function getDisplayConsumidorAttribute(): string
+    {
+        if (! empty($this->nombres_consumidor)) {
+            $doc = $this->documento ? " ({$this->documento})" : '';
+            return $this->nombres_consumidor . $doc;
+        }
+        if ($this->usuario) {
+            return $this->usuario->nombres . ' (' . ($this->usuario->documento ?? '') . ')';
+        }
+        return ($this->visitante?->nombre ?? '-') . ' (visitante)';
+    }
+
+    /**
+     * Nombre empresa (preferir snapshot).
+     */
+    public function getDisplayEmpresaAttribute(): ?string
+    {
+        return $this->empresa_nombre ?? $this->empresa?->nombre ?? '-';
+    }
+
+    /**
+     * Nombre casino (preferir snapshot).
+     */
+    public function getDisplayCasinoAttribute(): ?string
+    {
+        return $this->casino_nombre ?? $this->casino?->nombre ?? '-';
+    }
+
+    /**
+     * Nombre horario (preferir snapshot).
+     */
+    public function getDisplayHorarioAttribute(): ?string
+    {
+        return $this->horario_nombre ?? $this->horarioConsumo?->nombre ?? '-';
+    }
+
+    /**
+     * Precio empleado formateado.
+     */
+    public function getDisplayPrecioEmpleadoAttribute(): string
+    {
+        return '$ ' . number_format((float) $this->precio_empleado, 0, ',', '.');
+    }
+
+    /**
+     * Precio casino formateado.
+     */
+    public function getDisplayPrecioCasinoAttribute(): string
+    {
+        return '$ ' . number_format((float) $this->precio_casino, 0, ',', '.');
     }
 }

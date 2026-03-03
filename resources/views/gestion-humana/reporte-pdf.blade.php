@@ -67,12 +67,12 @@
             <tr>
                 <td>{{ $c->fecha_consumo?->format('d/m/Y') }}</td>
                 <td>{{ $c->hora_consumo ? (is_object($c->hora_consumo) ? $c->hora_consumo->format('H:i') : substr($c->hora_consumo, 0, 5)) : '—' }}</td>
-                <td>{{ $c->empresa?->nombre ?? '—' }}</td>
-                <td>{{ $c->usuario ? $c->usuario->nombres . ' (' . $c->usuario->documento . ')' : ($c->visitante ? $c->visitante->nombre : '—') }}</td>
-                <td>{{ $c->horarioConsumo?->nombre ?? '—' }}</td>
-                <td>{{ $c->casino?->nombre ?? '—' }}</td>
-                <td class="text-right">$ {{ number_format($c->precio_empleado, 0, ',', '.') }}</td>
-                <td class="text-right">$ {{ number_format($c->precio_casino, 0, ',', '.') }}</td>
+                <td>{{ $c->display_empresa }}</td>
+                <td>{{ $c->display_consumidor }}</td>
+                <td>{{ $c->display_horario }}</td>
+                <td>{{ $c->display_casino }}</td>
+                <td class="text-right">{{ $c->display_precio_empleado }}</td>
+                <td class="text-right">{{ $c->display_precio_casino }}</td>
             </tr>
             @endforeach
         </tbody>

@@ -118,12 +118,12 @@
                         <tr class="bg-white hover:bg-slate-50 transition-colors even:bg-slate-50/50">
                             <td class="px-4 py-2 text-sm text-slate-900" data-label="Fecha">{{ $c->fecha_consumo?->format('d/m/Y') }}</td>
                             <td class="px-4 py-2 text-sm text-slate-900" data-label="Hora">{{ $c->hora_consumo ? (is_object($c->hora_consumo) ? $c->hora_consumo->format('H:i') : substr($c->hora_consumo, 0, 5)) : '—' }}</td>
-                            <td class="px-4 py-2 text-sm text-slate-600" data-label="Empresa">{{ $c->empresa?->nombre ?? '—' }}</td>
-                            <td class="px-4 py-2 text-sm text-slate-900" data-label="Persona">{{ $c->usuario ? $c->usuario->nombres . ' (' . $c->usuario->documento . ')' : ($c->visitante ? $c->visitante->nombre : '—') }}</td>
-                            <td class="px-4 py-2 text-sm text-slate-600" data-label="Horario">{{ $c->horarioConsumo?->nombre ?? '—' }}</td>
-                            <td class="px-4 py-2 text-sm text-slate-600" data-label="Casino">{{ $c->casino?->nombre ?? '—' }}</td>
-                            <td class="px-4 py-2 text-sm text-right text-slate-900" data-label="P. empleado">$ {{ number_format($c->precio_empleado, 0, ',', '.') }}</td>
-                            <td class="px-4 py-2 text-sm text-right text-slate-900" data-label="P. casino">$ {{ number_format($c->precio_casino, 0, ',', '.') }}</td>
+                            <td class="px-4 py-2 text-sm text-slate-600" data-label="Empresa">{{ $c->display_empresa }}</td>
+                            <td class="px-4 py-2 text-sm text-slate-900" data-label="Persona">{{ $c->display_consumidor }}</td>
+                            <td class="px-4 py-2 text-sm text-slate-600" data-label="Horario">{{ $c->display_horario }}</td>
+                            <td class="px-4 py-2 text-sm text-slate-600" data-label="Casino">{{ $c->display_casino }}</td>
+                            <td class="px-4 py-2 text-sm text-right text-slate-900" data-label="P. empleado">{{ $c->display_precio_empleado }}</td>
+                            <td class="px-4 py-2 text-sm text-right text-slate-900" data-label="P. casino">{{ $c->display_precio_casino }}</td>
                         </tr>
                         @endforeach
                         @if($consumos->isEmpty())
