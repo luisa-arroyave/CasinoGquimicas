@@ -75,6 +75,41 @@ class DashboardController extends Controller
             ]);
         }
 
+        if ($role === 'empleado') {
+            $usuario = auth()->user();
+            $idUsuario = $usuario->id_usuario ?? null;
+            $hoy = Carbon::now();
+            $mes = $hoy->month;
+            $año = $hoy->year;
+
+            $consumosQuincena1_15 = collect();
+            $consumosQuincena16_31 = collect();
+            if ($idUsuario) {
+                $consumosQuincena1_15 = RegistroConsumo::with(['horarioConsumo'])
+                    ->where('id_usuario', $idUsuario)
+                    ->whereYear('fecha_consumo', $año)
+                    ->whereMonth('fecha_consumo', $mes)
+                    ->whereDay('fecha_consumo', '<=', 15)
+                    ->orderBy('fecha_consumo')
+                    ->orderBy('hora_consumo')
+                    ->get();
+                $consumosQuincena16_31 = RegistroConsumo::with(['horarioConsumo'])
+                    ->where('id_usuario', $idUsuario)
+                    ->whereYear('fecha_consumo', $año)
+                    ->whereMonth('fecha_consumo', $mes)
+                    ->whereDay('fecha_consumo', '>=', 16)
+                    ->orderBy('fecha_consumo')
+                    ->orderBy('hora_consumo')
+                    ->get();
+            }
+
+            return view($view, [
+                'consumosQuincena1_15'  => $consumosQuincena1_15,
+                'consumosQuincena16_31'  => $consumosQuincena16_31,
+                'mesActual'             => $hoy->translatedFormat('F Y'),
+            ]);
+        }
+
         if ($role === 'casino') {
             $user = auth()->user();
             $hoy = Carbon::now();
