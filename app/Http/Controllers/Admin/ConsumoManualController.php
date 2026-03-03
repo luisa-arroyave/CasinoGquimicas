@@ -61,7 +61,9 @@ class ConsumoManualController extends Controller
             'direccion_entrega' => 'nullable|string|max:500',
         ]);
 
-        $casino = \App\Models\Casino::find($valid['id_casino']);
+        $casino = Casino::find($valid['id_casino']);
+        $horario = HorarioConsumo::find($valid['id_horario']);
+        $empresa = Empresa::find($valid['id_empresa']);
         $tipoPedido = strtolower(trim($casino->tipo_casino ?? '')) === 'domicilio' ? 'domicilio' : 'en_sitio';
 
         $idUsuario = $valid['tipo_consumidor'] === 'usuario' ? $valid['id_usuario'] : null;
@@ -71,12 +73,33 @@ class ConsumoManualController extends Controller
             return back()->withInput()->withErrors(['tipo_consumidor' => 'Debe seleccionar un usuario o un visitante.']);
         }
 
+        $documento = null;
+        $nombresConsumidor = null;
+        $tipoUsuarioNombre = null;
+        if ($idUsuario) {
+            $usuario = Usuario::with(['rol', 'tipoUsuario'])->find($idUsuario);
+            $documento = $usuario?->documento;
+            $nombresConsumidor = $usuario?->nombres;
+            $tipoUsuarioNombre = $usuario?->rol?->nombre ?? $usuario?->tipoUsuario?->nombre;
+        } else {
+            $visitante = Visitante::find($idVisitante);
+            $documento = $visitante?->documento;
+            $nombresConsumidor = $visitante?->nombre;
+            $tipoUsuarioNombre = 'Visitante';
+        }
+
         RegistroConsumo::create([
             'id_usuario' => $idUsuario,
             'id_visitante' => $idVisitante,
             'id_empresa' => $valid['id_empresa'],
             'id_casino' => $valid['id_casino'],
             'id_horario' => $valid['id_horario'],
+            'documento' => $documento,
+            'nombres_consumidor' => $nombresConsumidor,
+            'tipo_usuario_nombre' => $tipoUsuarioNombre,
+            'empresa_nombre' => $empresa?->nombre,
+            'casino_nombre' => $casino->nombre,
+            'horario_nombre' => $horario?->nombre,
             'fecha_consumo' => $valid['fecha_consumo'],
             'hora_consumo' => $valid['hora_consumo'],
             'precio_empleado' => $valid['precio_empleado'],

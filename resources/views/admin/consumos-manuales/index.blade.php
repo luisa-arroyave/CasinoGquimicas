@@ -29,16 +29,10 @@
             @forelse($consumos as $c)
             <tr class="hover:bg-slate-50">
                 <td class="px-4 py-3 text-slate-800">{{ $c->fecha_consumo->format('d/m/Y') }} {{ \Carbon\Carbon::parse($c->hora_consumo)->format('H:i') }}</td>
-                <td class="px-4 py-3">
-                    @if($c->usuario)
-                        {{ $c->usuario->nombres }} ({{ $c->usuario->documento }})
-                    @else
-                        {{ $c->visitante->nombre ?? '-' }} (visitante)
-                    @endif
-                </td>
-                <td class="px-4 py-3">{{ $c->empresa->nombre ?? '-' }}</td>
-                <td class="px-4 py-3">{{ $c->casino->nombre ?? '-' }}</td>
-                <td class="px-4 py-3">{{ $c->horarioConsumo->nombre ?? '-' }}</td>
+                <td class="px-4 py-3">{{ $c->display_consumidor }}</td>
+                <td class="px-4 py-3">{{ $c->display_empresa }}</td>
+                <td class="px-4 py-3">{{ $c->display_casino }}</td>
+                <td class="px-4 py-3">{{ $c->display_horario }}</td>
                 <td class="px-4 py-3">{{ $c->estado }}</td>
             </tr>
             @empty

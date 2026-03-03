@@ -32,46 +32,50 @@
                class="absolute -left-[9999px] top-0 opacity-0"
                autocomplete="off">
 
-        <button type="button" id="btn-toggle-camara" class="w-full sm:w-auto min-h-[48px] px-6 py-3 rounded-lg bg-slate-800 text-white font-medium hover:bg-slate-700 active:bg-slate-600 focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors touch-manipulation">
-            Usar cámara para escanear
-        </button>
-        <div id="zona-camara" class="mt-4 hidden">
-            <div id="lector-qr" class="rounded-lg overflow-hidden border border-slate-200 bg-slate-100 w-full max-w-sm mx-auto min-h-[280px] aspect-square max-h-[70vh]"></div>
-            <p class="text-center text-sm text-slate-500 mt-2">Apunta la cámara al código QR. Mantén el código centrado y a una distancia estable.</p>
-            <p class="text-center text-xs text-slate-400 mt-1">Si no detecta, puedes subir una foto del QR.</p>
-            <label class="mt-2 flex justify-center">
-                <span class="px-4 py-2 rounded-lg bg-slate-100 text-slate-700 text-sm font-medium cursor-pointer hover:bg-slate-200">
-                    Subir foto del QR
-                </span>
-                <input type="file" id="input-foto-qr" accept="image/*" capture="environment" class="hidden">
-            </label>
-        </div>
+        <label class="block cursor-pointer">
+            <span class="flex items-center justify-center gap-2 min-h-[48px] px-6 py-3 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 active:bg-emerald-600 focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors touch-manipulation">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                Subir foto del QR
+            </span>
+            <input type="file" id="input-foto-qr" accept="image/*" capture="environment" class="hidden">
+        </label>
+        <p class="text-xs text-slate-500 mt-2">Tome una foto del QR o seleccione una imagen.</p>
     </div>
 
+    <div id="lector-qr-file" aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:260px;height:260px"></div>
     <div id="resultado" class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm hidden">
         <p id="resultado-mensaje" class="font-medium"></p>
         <p id="resultado-detalle" class="text-sm text-slate-600 mt-1"></p>
+        <button type="button" id="btn-cancelar-validacion" class="mt-3 hidden text-sm font-medium text-slate-600 underline hover:text-slate-800">
+            Cancelar e intentar de nuevo
+        </button>
     </div>
 </div>
 
 @push('scripts')
-<script src="{{ asset('js/html5-qrcode.min.js') }}"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script>
 (function() {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '{{ csrf_token() }}';
+    {{-- URL: mismo origen que la página (https, IP o localhost) --}}
+    var basePath = (function() {
+        var fromConfig = '{{ parse_url(config("app.url"), PHP_URL_PATH) ?? "" }}'.replace(/\/$/, '');
+        var fromPage = (window.location.pathname || '').replace(/\/casino\/escaneo-qr.*$/i, '');
+        return fromConfig || fromPage || '';
+    })();
+    var urlValidarQr = window.location.origin + (basePath ? basePath.replace(/\/$/, '') : '') + '/api/consumo/validar-qr';
     const inputQr = document.getElementById('input-qr');
     const idCasinoSelect = document.getElementById('id_casino');
     const contadorEl = document.getElementById('contador-entregados');
     const resultadoEl = document.getElementById('resultado');
     const resultadoMensaje = document.getElementById('resultado-mensaje');
     const resultadoDetalle = document.getElementById('resultado-detalle');
-    const zonaCamara = document.getElementById('zona-camara');
-    const lectorQr = document.getElementById('lector-qr');
-    const btnToggleCamara = document.getElementById('btn-toggle-camara');
+    const btnCancelar = document.getElementById('btn-cancelar-validacion');
 
-    let scanner = null;
+    let xhrActual = null;
     let entregadosHoy = 0;
     let ultimoCodigoLeido = '';
+    let validandoEnCurso = false;
 
     function playSuccessSound() {
         try {
@@ -89,10 +93,22 @@
         } catch (e) {}
     }
 
+    function showDetectado() {
+        resultadoEl.classList.remove('hidden');
+        resultadoEl.classList.remove('bg-red-50', 'border-red-200', 'bg-green-50', 'border-green-200');
+        resultadoEl.classList.add('bg-sky-50', 'border-sky-200');
+        resultadoMensaje.classList.remove('text-red-800', 'text-green-800');
+        resultadoMensaje.classList.add('text-sky-800');
+        resultadoMensaje.textContent = 'Código detectado. Validando...';
+        resultadoDetalle.textContent = '';
+        if (btnCancelar) { btnCancelar.classList.remove('hidden'); }
+        resultadoEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        playSuccessSound();
+    }
+
     function showResult(ok, mensaje, detalle, nuevoContador) {
         resultadoEl.classList.remove('hidden');
-        resultadoEl.classList.remove('bg-red-50', 'border-red-200');
-        resultadoEl.classList.remove('bg-green-50', 'border-green-200');
+        resultadoEl.classList.remove('bg-red-50', 'border-red-200', 'bg-green-50', 'border-green-200', 'bg-sky-50', 'border-sky-200');
         if (ok) {
             resultadoEl.classList.add('bg-green-50', 'border-green-200');
             resultadoMensaje.classList.add('text-green-800');
@@ -109,42 +125,96 @@
         }
         resultadoMensaje.textContent = mensaje;
         resultadoDetalle.textContent = detalle || '';
+        if (btnCancelar) { btnCancelar.classList.add('hidden'); }
         resultadoEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
+    function cancelarValidacion() {
+        validandoEnCurso = false;
+        if (xhrActual) { try { xhrActual.abort(); } catch(e) {} xhrActual = null; }
+        showResult(false, 'Cancelado. Puede escanear de nuevo.', '');
+        resumeScanner();
+    }
+
     function validarQr(codigoQr) {
-        const idCasino = idCasinoSelect.value;
+        try {
+        var idCasino = idCasinoSelect ? idCasinoSelect.value : '';
         if (!idCasino) {
             showResult(false, 'Selecciona un punto de entrega (casino).', '');
             return;
         }
-        if (!codigoQr || !codigoQr.trim()) {
+        if (!codigoQr || !String(codigoQr).trim()) {
             showResult(false, 'Escanea un código QR.', '');
             return;
         }
+        if (validandoEnCurso) return;
+        validandoEnCurso = true;
+        if (xhrActual) { try { xhrActual.abort(); } catch(e) {} }
 
-        fetch('{{ url("/api/consumo/validar-qr") }}', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'X-CSRF-TOKEN': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            body: JSON.stringify({ codigo_qr: codigoQr.trim(), id_casino: parseInt(idCasino, 10) })
-        })
-        .then(r => r.json())
-        .then(data => {
-            if (data.ok) {
-                showResult(true, 'Consumo registrado correctamente.', data.consumo ? (data.consumo.nombres + ' · ' + data.consumo.horario) : '', data.entregados_hoy);
-                ultimoCodigoLeido = '';
-                try { if (scanner && typeof scanner.resume === 'function') scanner.resume(); } catch (e) {}
+        var xhr = new XMLHttpRequest();
+        xhrActual = xhr;
+        xhr.open('POST', urlValidarQr, true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.setRequestHeader('X-CSRF-TOKEN', csrfToken || '');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.timeout = 8000;
+        xhr.withCredentials = true;
+
+        xhr.onload = function() {
+            xhrActual = null;
+            validandoEnCurso = false;
+            var data = {};
+            try { data = JSON.parse(xhr.responseText || '{}'); } catch(e) {}
+            if (xhr.status >= 200 && xhr.status < 300) {
+                if (data && data.ok) {
+                    showResult(true, 'Consumo registrado correctamente.', data.consumo ? (data.consumo.nombres + ' · ' + data.consumo.horario) : '', data.entregados_hoy);
+                    ultimoCodigoLeido = '';
+                } else {
+                    showResult(false, (data && data.mensaje) || 'Error al validar.', '');
+                    resumeScanner();
+                }
             } else {
-                showResult(false, data.mensaje || 'Error al validar.', '');
+                showResult(false, (data && data.mensaje) || (data && data.message) || ('Error ' + xhr.status), '');
+                resumeScanner();
             }
-        })
-        .catch(() => showResult(false, 'Error de conexión. Intenta de nuevo.', ''));
+        };
+        xhr.onerror = function() {
+            xhrActual = null;
+            validandoEnCurso = false;
+            showResult(false, 'Error de conexión. Revisa la red e intenta de nuevo.', '');
+            resumeScanner();
+        };
+        xhr.ontimeout = function() {
+            xhrActual = null;
+            validandoEnCurso = false;
+            showResult(false, 'Tiempo de espera agotado. Revisa la conexión.', '');
+            resumeScanner();
+        };
+        xhr.send(JSON.stringify({ codigo_qr: String(codigoQr).trim(), id_casino: parseInt(idCasino, 10) }));
+
+        // Respaldo a 5 segundos: si seguimos en Validando, forzar
+        setTimeout(function() {
+            if (validandoEnCurso) {
+                validandoEnCurso = false;
+                if (xhrActual) { try { xhrActual.abort(); } catch(e) {} xhrActual = null; }
+                if (resultadoMensaje && resultadoMensaje.textContent.indexOf('Validando') >= 0) {
+                    showResult(false, 'No se pudo completar. Revisa tu conexión e intenta de nuevo.', '');
+                    resumeScanner();
+                }
+            }
+        }, 5000);
+        } catch (e) {
+            validandoEnCurso = false;
+            xhrActual = null;
+            showResult(false, 'Error. Intenta de nuevo.', e && e.message ? String(e.message) : '');
+            resumeScanner();
+        }
     }
+
+    function resumeScanner() {}
+
+    if (btnCancelar) btnCancelar.addEventListener('click', cancelarValidacion);
 
     // Soporte para lector de código QR conectado como teclado:
     // escribe en input oculto y envía Enter al final.
@@ -168,33 +238,11 @@
         });
     }
 
-    btnToggleCamara.addEventListener('click', function() {
-        if (zonaCamara.classList.contains('hidden')) {
-            zonaCamara.classList.remove('hidden');
-            if (!window.Html5Qrcode) return;
-            scanner = new Html5Qrcode('lector-qr');
-            var config = { fps: 10 };
-            scanner.start({ facingMode: 'environment' }, config, function(decodedText) {
-                ultimoCodigoLeido = decodedText;
-                // Pausar de inmediato para evitar lecturas repetidas
-                if (scanner && scanner.isScanning && scanner.isScanning()) {
-                    scanner.pause();
-                }
-                // Validar automáticamente sin pedir "Enviar"
-                validarQr(decodedText);
-            }).catch(function(err) {
-                showResult(false, 'No se pudo iniciar la cámara.', err && err.message ? String(err.message) : '');
-            });
-        } else {
-            zonaCamara.classList.add('hidden');
-            if (scanner) { scanner.stop(); scanner = null; }
-        }
-    });
-
     function actualizarContadorInicial() {
         const idCasino = idCasinoSelect.value;
         if (!idCasino) return;
-        fetch('{{ url("/api/consumo/entregados-hoy") }}?id_casino=' + idCasino, {
+        var urlEntregados = window.location.origin + (basePath ? basePath.replace(/\/$/, '') : '') + '/api/consumo/entregados-hoy';
+        fetch(urlEntregados + '?id_casino=' + idCasino, {
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         })
         .then(r => r.json())
@@ -204,31 +252,66 @@
     actualizarContadorInicial();
     idCasinoSelect.addEventListener('change', actualizarContadorInicial);
 
-    // Fallback: subir foto del QR si la cámara en vivo no detecta
+    function redimensionarImagenParaMovil(file) {
+        return new Promise(function(resolve, reject) {
+            var maxSize = 1200;
+            var img = new Image();
+            var url = URL.createObjectURL(file);
+            img.onload = function() {
+                URL.revokeObjectURL(url);
+                var w = img.naturalWidth || img.width;
+                var h = img.naturalHeight || img.height;
+                if (w <= maxSize && h <= maxSize) {
+                    resolve(file);
+                    return;
+                }
+                var scale = Math.min(maxSize / w, maxSize / h);
+                var nw = Math.round(w * scale);
+                var nh = Math.round(h * scale);
+                var canvas = document.createElement('canvas');
+                canvas.width = nw;
+                canvas.height = nh;
+                var ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, nw, nh);
+                canvas.toBlob(function(blob) {
+                    if (blob) resolve(new File([blob], 'qr.jpg', { type: 'image/jpeg' }));
+                    else resolve(file);
+                }, 'image/jpeg', 0.92);
+            };
+            img.onerror = function() {
+                URL.revokeObjectURL(url);
+                resolve(file);
+            };
+            img.src = url;
+        });
+    }
+
     var inputFotoQr = document.getElementById('input-foto-qr');
     if (inputFotoQr) {
         inputFotoQr.addEventListener('change', function(e) {
             var file = e.target.files && e.target.files[0];
             if (!file || !file.type.startsWith('image/')) return;
-            if (!window.Html5Qrcode) return;
+            if (!window.Html5Qrcode) { showResult(false, 'Error: librería QR no cargada.', ''); return; }
             inputFotoQr.value = '';
-            var configCam = { fps: 10 };
-            var onScan = function(t) { if (scanner && scanner.isScanning && scanner.isScanning()) scanner.pause(); validarQr(t); };
-            var scanFileNow = function(sc) {
-                sc.scanFile(file, false).then(function(decodedText) {
+            resultadoEl.classList.remove('hidden');
+            resultadoEl.classList.remove('bg-red-50','bg-green-50');
+            resultadoEl.classList.add('bg-sky-50','border-sky-200');
+            resultadoMensaje.textContent = 'Analizando imagen...';
+            resultadoDetalle.textContent = '';
+            if (btnCancelar) btnCancelar.classList.add('hidden');
+            redimensionarImagenParaMovil(file).then(function(archivo) {
+                var sc = new Html5Qrcode('lector-qr-file');
+                return sc.scanFile(archivo, false).then(function(decodedText) {
+                    if (!decodedText || !String(decodedText).trim()) {
+                        showResult(false, 'No se detectó código QR en la imagen.', 'Asegúrese de que el QR sea claro y esté completo.');
+                        return;
+                    }
+                    showDetectado();
                     validarQr(decodedText);
-                    if (sc === scanner) scanner.start({ facingMode: 'environment' }, configCam, onScan).catch(function() {});
-                }).catch(function() {
-                    showResult(false, 'No se detectó ningún código QR en la imagen.', 'Intenta con otra foto o escanea en vivo.');
-                    if (sc === scanner) scanner.start({ facingMode: 'environment' }, configCam, onScan).catch(function() {});
                 });
-            };
-            if (scanner && scanner.getState && scanner.getState() === 2) {
-                scanner.stop().then(function() { scanFileNow(scanner); }).catch(function() { scanFileNow(scanner); });
-            } else {
-                var sc = new Html5Qrcode('lector-qr');
-                scanFileNow(sc);
-            }
+            }).catch(function(err) {
+                showResult(false, 'No se detectó código QR en la imagen.', 'Tome una foto más nítida. Evite formatos HEIC (iPhone: use formato más compatible en Ajustes).');
+            });
         });
     }
 })();

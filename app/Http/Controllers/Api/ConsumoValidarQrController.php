@@ -48,6 +48,11 @@ class ConsumoValidarQrController extends Controller
         $codigoQr = trim($request->input('codigo_qr'));
         $idCasino = (int) $request->input('id_casino');
 
+        // Algunos lectores QR de celular interpretan CONSUMO:10 como URL y envían http://consumo:10/
+        if (preg_match('#^https?://consumo:(\d+)/?$#i', $codigoQr, $urlMatch)) {
+            $codigoQr = 'CONSUMO-' . $urlMatch[1];
+        }
+
         $user = $request->user();
         if ($user && $user->role === 'casino' && $user->id_casino_asignado && (int) $user->id_casino_asignado !== $idCasino) {
             return response()->json([
@@ -58,10 +63,8 @@ class ConsumoValidarQrController extends Controller
 
         $consumo = null;
 
-        // Formato nuevo: QR generado al registrar consumo.
-        // Algunos lectores están devolviendo "CONSUMOÑ6" en vez de "CONSUMO:6" por el layout del teclado,
-        // por eso aceptamos cualquier carácter no numérico entre "CONSUMO" y el ID.
-        if (preg_match('/^CONSUMO\D?(\d+)$/u', $codigoQr, $m)) {
+        // Formato: CONSUMO:id o CONSUMO6 o con espacios/caracteres extra (cámara, lectores)
+        if (preg_match('/CONSUMO\D*(\d+)/', $codigoQr, $m)) {
             $consumo = RegistroConsumo::with(['usuario', 'horarioConsumo'])
                 ->where('id_consumo', (int) $m[1])
                 ->where('estado', 'SOLICITADO')
