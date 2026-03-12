@@ -18,6 +18,7 @@ class RegistroConsumo extends Model
     protected $fillable = [
         'id_usuario',
         'id_visitante',
+        'id_area_visita',
         'id_empresa',
         'id_casino',
         'id_horario',
@@ -25,6 +26,7 @@ class RegistroConsumo extends Model
         'nombres_consumidor',
         'tipo_usuario_nombre',
         'empresa_nombre',
+        'empresa_temporal_nombre',
         'casino_nombre',
         'horario_nombre',
         'fecha_consumo',
@@ -59,6 +61,14 @@ class RegistroConsumo extends Model
     public function visitante(): BelongsTo
     {
         return $this->belongsTo(Visitante::class, 'id_visitante', 'id_visitante');
+    }
+
+    /**
+     * Área de visita (cuando el consumidor es visitante).
+     */
+    public function areaVisita(): BelongsTo
+    {
+        return $this->belongsTo(AreaVisita::class, 'id_area_visita', 'id_area_visita');
     }
 
     /**

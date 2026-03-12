@@ -34,11 +34,10 @@ class SolicitarConsumoController extends Controller
         $sedeIdsParaCasinos = ! empty($sedesPermitidasIds)
             ? ($sedeElegida ? [$sedeElegida] : $sedesPermitidasIds)
             : [];
-        $casinos = Casino::where('activo', true);
+        $casinos = Casino::where('activo', true)
+            ->whereHas('empresas', fn ($q) => $q->where('empresas.id_empresa', $usuarioEmpresarial->id_empresa));
         if (! empty($sedeIdsParaCasinos)) {
             $casinos->whereIn('id_sede', $sedeIdsParaCasinos);
-        } else {
-            $casinos->where('id_empresa', $usuarioEmpresarial->id_empresa);
         }
         $casinos = $casinos->orderBy('nombre')->get();
 
@@ -102,10 +101,9 @@ class SolicitarConsumoController extends Controller
             if (! in_array($casino->id_sede, $sedesPermitidasIds)) {
                 abort(403, 'No puede registrar consumo en ese punto de entrega.');
             }
-        } else {
-            if ($casino->id_empresa != $usuarioEmpresarial->id_empresa) {
-                abort(403, 'No puede registrar consumo en ese punto de entrega.');
-            }
+        }
+        if (! $casino->empresas()->where('empresas.id_empresa', $usuarioEmpresarial->id_empresa)->exists()) {
+            abort(403, 'Su empresa no tiene acceso a ese punto de entrega.');
         }
 
         $esDomicilio = strtolower(trim($casino->tipo_casino ?? '')) === 'domicilio';
@@ -141,8 +139,9 @@ class SolicitarConsumoController extends Controller
         $precioEmpleado = $precio ? (float) $precio->precio_empleado : 0;
         $precioCasino = $precio ? (float) $precio->precio_casino : 0;
 
-        $usuarioEmpresarial->load(['rol', 'tipoUsuario', 'empresa']);
+        $usuarioEmpresarial->load(['rol', 'tipoUsuario', 'empresa', 'empresaTemporal']);
         $empresa = $usuarioEmpresarial->empresa;
+        $empresaTemporalNombre = $usuarioEmpresarial->empresaTemporal?->nombre;
 
         $consumo = RegistroConsumo::create([
             'id_usuario' => $usuarioEmpresarial->id_usuario,
@@ -152,8 +151,9 @@ class SolicitarConsumoController extends Controller
             'id_horario' => $horario->id_horario,
             'documento' => $usuarioEmpresarial->documento,
             'nombres_consumidor' => $usuarioEmpresarial->nombres,
-            'tipo_usuario_nombre' => $usuarioEmpresarial->rol?->nombre ?? $usuarioEmpresarial->tipoUsuario?->nombre ?? null,
+            'tipo_usuario_nombre' => $usuarioEmpresarial->tipoUsuario?->nombre ?? null,
             'empresa_nombre' => $empresa?->nombre,
+            'empresa_temporal_nombre' => $empresaTemporalNombre,
             'casino_nombre' => $casino->nombre,
             'horario_nombre' => $horario->nombre,
             'fecha_consumo' => $hoy,

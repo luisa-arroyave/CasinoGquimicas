@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>Cuenta de cobro - {{ $casino->nombre }}</title>
+    <title>Soporte para Factura - {{ $casino->nombre }}</title>
     <style>
         body { font-family: DejaVu Sans, sans-serif; font-size: 11px; color: #333; }
         h1 { font-size: 18px; margin-bottom: 4px; }
@@ -18,7 +18,7 @@
     </style>
 </head>
 <body>
-    <h1>Cuenta de cobro</h1>
+    <h1>Soporte para Factura</h1>
     <div class="meta">
         <strong>{{ $casino->nombre }}</strong><br>
         Período: {{ \Carbon\Carbon::parse($fecha_inicio)->format('d/m/Y') }} - {{ \Carbon\Carbon::parse($fecha_fin)->format('d/m/Y') }}<br>
@@ -56,7 +56,7 @@
     </div>
 
     <div class="footer">
-        {{ config('app.name') }} — Cuenta de cobro #{{ $cuenta->id_cuenta }}
+        {{ config('app.name') }} — Soporte para Factura #{{ $cuenta->id_cuenta }}
     </div>
 </body>
 </html>

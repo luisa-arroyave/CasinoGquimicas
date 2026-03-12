@@ -25,7 +25,7 @@
             <tr class="hover:bg-slate-50">
                 <td class="px-4 py-3 text-slate-800">{{ $c->NIT }}</td>
                 <td class="px-4 py-3 text-slate-800">{{ $c->nombre }}</td>
-                <td class="px-4 py-3">{{ $c->empresa->nombre ?? '-' }}</td>
+                <td class="px-4 py-3">{{ $c->empresas->pluck('nombre')->join(', ') ?: '-' }}</td>
                 <td class="px-4 py-3">{{ $c->tipo_casino ?? '-' }}</td>
                 <td class="px-4 py-3">{{ $c->activo ? 'Sí' : 'No' }}</td>
                 <td class="px-4 py-3 text-right space-x-2">

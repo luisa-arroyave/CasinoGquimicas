@@ -18,14 +18,20 @@
                 <input type="text" name="nombre" id="nombre" value="{{ old('nombre') }}" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
                 @error('nombre')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
-            <div>
-                <label for="id_empresa" class="block text-sm font-medium text-slate-700">Empresa</label>
-                <select name="id_empresa" id="id_empresa" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
-                    @foreach($empresas as $e)
-                        <option value="{{ $e->id_empresa }}" {{ old('id_empresa') == $e->id_empresa ? 'selected' : '' }}>{{ $e->nombre }}</option>
-                    @endforeach
-                </select>
-                @error('id_empresa')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            <div class="md:col-span-2">
+                <p class="block text-sm font-medium text-slate-700 mb-1">Empresas asignadas</p>
+                <p class="text-xs text-slate-500 mb-2">Seleccione las empresas cuyos empleados pueden consumir en este casino.</p>
+                <div class="rounded-lg border border-slate-300 bg-slate-50/50 p-4 max-h-48 overflow-y-auto">
+                    <div class="flex flex-wrap gap-x-6 gap-y-2">
+                        @foreach($empresas as $e)
+                        <label class="flex items-center gap-2 cursor-pointer hover:bg-slate-100 rounded px-2 py-1 -mx-2 -my-1">
+                            <input type="checkbox" name="empresas[]" value="{{ $e->id_empresa }}" {{ in_array($e->id_empresa, old('empresas', [])) ? 'checked' : '' }} class="rounded border-slate-300 text-slate-800 focus:ring-slate-500">
+                            <span class="text-sm text-slate-700">{{ $e->nombre }}</span>
+                        </label>
+                        @endforeach
+                    </div>
+                </div>
+                @error('empresas')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
             <div>
                 <label for="id_sede" class="block text-sm font-medium text-slate-700">Sede</label>

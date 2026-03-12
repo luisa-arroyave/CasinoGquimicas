@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\CuentaCobroEnviada;
+use App\Mail\SoporteFacturaEnviada;
 use App\Models\Casino;
 use App\Models\CuentaCobro;
 use App\Models\RegistroConsumo;
@@ -13,10 +13,10 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 
-class CuentaCobroController extends Controller
+class SoporteFacturaController extends Controller
 {
     /**
-     * Formulario: seleccionar casino y rango de fechas para generar cuenta de cobro.
+     * Formulario: seleccionar casino y rango de fechas para generar soporte para factura.
      */
     public function index(Request $request): View
     {
@@ -31,7 +31,7 @@ class CuentaCobroController extends Controller
             $cuentaGenerada = CuentaCobro::with('casino.empresa')->find($request->input('cuenta_id'));
         }
 
-        return view('casino.cuenta-cobro.index', [
+        return view('casino.soporte-factura.index', [
             'casinos' => $casinos,
             'cuentaGenerada' => $cuentaGenerada,
         ]);
@@ -83,11 +83,11 @@ class CuentaCobroController extends Controller
             'archivo_pdf' => null,
         ]);
 
-        $nombreArchivo = 'cuenta-cobro-' . $cuenta->id_cuenta . '-' . $fechaInicio . '-' . $fechaFin . '.pdf';
+        $nombreArchivo = 'soporte-factura-' . $cuenta->id_cuenta . '-' . $fechaInicio . '-' . $fechaFin . '.pdf';
         $rutaPdf = 'cuentas_cobro/' . $nombreArchivo;
 
         $cuenta->load('casino');
-        $pdf = Pdf::loadView('casino.cuenta-cobro.pdf', [
+        $pdf = Pdf::loadView('casino.soporte-factura.pdf', [
             'cuenta' => $cuenta,
             'casino' => $casino,
             'consumos' => $consumos,
@@ -100,21 +100,21 @@ class CuentaCobroController extends Controller
         Storage::disk('local')->put($rutaPdf, $pdf->output());
         $cuenta->update(['archivo_pdf' => $rutaPdf]);
 
-        return redirect()->route('casino.cuenta-cobro.index', ['cuenta_id' => $cuenta->id_cuenta])
-            ->with('success', 'Cuenta de cobro generada. Puede descargar el PDF o enviarlo a contabilidad.');
+        return redirect()->route('casino.soporte-factura.index', ['cuenta_id' => $cuenta->id_cuenta])
+            ->with('success', 'Soporte para factura generado. Puede descargar el PDF o enviarlo a contabilidad.');
     }
 
     /**
-     * Descargar PDF de la cuenta de cobro.
+     * Descargar PDF del soporte para factura.
      */
     public function descargar(int $id)
     {
         $cuenta = CuentaCobro::with('casino')->findOrFail($id);
         if (! $cuenta->archivo_pdf || ! Storage::disk('local')->exists($cuenta->archivo_pdf)) {
-            return redirect()->route('casino.cuenta-cobro.index')->with('error', 'El archivo PDF no está disponible.');
+            return redirect()->route('casino.soporte-factura.index')->with('error', 'El archivo PDF no está disponible.');
         }
 
-        $nombreDescarga = 'cuenta-cobro-' . $cuenta->casino->nombre . '-' . $cuenta->fecha_inicio->format('Y-m-d') . '.pdf';
+        $nombreDescarga = 'soporte-factura-' . $cuenta->casino->nombre . '-' . $cuenta->fecha_inicio->format('Y-m-d') . '.pdf';
         $nombreDescarga = preg_replace('/[^a-zA-Z0-9\-_.]/', '-', $nombreDescarga);
 
         return response()->download(Storage::disk('local')->path($cuenta->archivo_pdf), $nombreDescarga, [
@@ -130,7 +130,7 @@ class CuentaCobroController extends Controller
     {
         $cuenta = CuentaCobro::with('casino.empresa')->findOrFail($id);
         if (! $cuenta->archivo_pdf || ! Storage::disk('local')->exists($cuenta->archivo_pdf)) {
-            return redirect()->route('casino.cuenta-cobro.index')->with('error', 'El archivo PDF no está disponible.');
+            return redirect()->route('casino.soporte-factura.index')->with('error', 'El archivo PDF no está disponible.');
         }
 
         $empresa = $cuenta->casino->empresa;
@@ -144,12 +144,12 @@ class CuentaCobroController extends Controller
         }
 
         if (empty($destinatarios)) {
-            return redirect()->route('casino.cuenta-cobro.index')->with('error', 'Configure al menos un correo en la empresa o en el formulario.');
+            return redirect()->route('casino.soporte-factura.index')->with('error', 'Configure al menos un correo en la empresa o en el formulario.');
         }
 
-        Mail::to($destinatarios)->send(new CuentaCobroEnviada($cuenta));
+        Mail::to($destinatarios)->send(new SoporteFacturaEnviada($cuenta));
 
-        $mensaje = 'Cuenta de cobro enviada por correo a ' . implode(', ', $destinatarios);
-        return redirect()->route('casino.cuenta-cobro.index')->with('success', $mensaje);
+        $mensaje = 'Soporte para factura enviado por correo a ' . implode(', ', $destinatarios);
+        return redirect()->route('casino.soporte-factura.index')->with('success', $mensaje);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\AreaVisita;
 use App\Models\Casino;
 use App\Models\Empresa;
 use App\Models\HorarioConsumo;
@@ -41,7 +42,8 @@ class ConsumoManualController extends Controller
         })->map(function ($p) {
             return ['precio_empleado' => (float) $p->precio_empleado, 'precio_casino' => (float) $p->precio_casino];
         });
-        return view('admin.consumos-manuales.create', compact('empresas', 'casinos', 'horarios', 'usuarios', 'visitantes', 'precios'));
+        $areasVisita = AreaVisita::where('activo', true)->orderBy('nombre')->get();
+        return view('admin.consumos-manuales.create', compact('empresas', 'casinos', 'horarios', 'usuarios', 'visitantes', 'precios', 'areasVisita'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -50,6 +52,7 @@ class ConsumoManualController extends Controller
             'tipo_consumidor' => 'required|in:usuario,visitante',
             'id_usuario' => 'required_if:tipo_consumidor,usuario|nullable|exists:usuarios,id_usuario',
             'id_visitante' => 'required_if:tipo_consumidor,visitante|nullable|exists:visitantes,id_visitante',
+            'id_area_visita' => 'required_if:tipo_consumidor,visitante|nullable|exists:area_visita,id_area_visita',
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_casino' => 'required|exists:casinos,id_casino',
             'id_horario' => 'required|exists:horarios_consumo,id_horario',
@@ -57,7 +60,6 @@ class ConsumoManualController extends Controller
             'hora_consumo' => 'required|date_format:H:i',
             'precio_empleado' => 'required|numeric|min:0',
             'precio_casino' => 'required|numeric|min:0',
-            'estado' => 'required|string|max:20',
             'direccion_entrega' => 'nullable|string|max:500',
         ]);
 
@@ -76,11 +78,13 @@ class ConsumoManualController extends Controller
         $documento = null;
         $nombresConsumidor = null;
         $tipoUsuarioNombre = null;
+        $empresaTemporalNombre = null;
         if ($idUsuario) {
-            $usuario = Usuario::with(['rol', 'tipoUsuario'])->find($idUsuario);
+            $usuario = Usuario::with(['rol', 'tipoUsuario', 'empresaTemporal'])->find($idUsuario);
             $documento = $usuario?->documento;
             $nombresConsumidor = $usuario?->nombres;
-            $tipoUsuarioNombre = $usuario?->rol?->nombre ?? $usuario?->tipoUsuario?->nombre;
+            $tipoUsuarioNombre = $usuario?->tipoUsuario?->nombre;
+            $empresaTemporalNombre = $usuario?->empresaTemporal?->nombre;
         } else {
             $visitante = Visitante::find($idVisitante);
             $documento = $visitante?->documento;
@@ -88,9 +92,12 @@ class ConsumoManualController extends Controller
             $tipoUsuarioNombre = 'Visitante';
         }
 
+        $idAreaVisita = $valid['tipo_consumidor'] === 'visitante' ? ($valid['id_area_visita'] ?? null) : null;
+
         RegistroConsumo::create([
             'id_usuario' => $idUsuario,
             'id_visitante' => $idVisitante,
+            'id_area_visita' => $idAreaVisita,
             'id_empresa' => $valid['id_empresa'],
             'id_casino' => $valid['id_casino'],
             'id_horario' => $valid['id_horario'],
@@ -98,13 +105,14 @@ class ConsumoManualController extends Controller
             'nombres_consumidor' => $nombresConsumidor,
             'tipo_usuario_nombre' => $tipoUsuarioNombre,
             'empresa_nombre' => $empresa?->nombre,
+            'empresa_temporal_nombre' => $empresaTemporalNombre,
             'casino_nombre' => $casino->nombre,
             'horario_nombre' => $horario?->nombre,
             'fecha_consumo' => $valid['fecha_consumo'],
             'hora_consumo' => $valid['hora_consumo'],
             'precio_empleado' => $valid['precio_empleado'],
             'precio_casino' => $valid['precio_casino'],
-            'estado' => $valid['estado'],
+            'estado' => 'ENTREGADO',
             'tipo_pedido' => $tipoPedido,
             'direccion_entrega' => $tipoPedido === 'domicilio' ? ($valid['direccion_entrega'] ?? null) : null,
             'registrado_por' => null,

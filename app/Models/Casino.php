@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -33,11 +34,27 @@ class Casino extends Model
     ];
 
     /**
-     * Empresa que opera el casino.
+     * Empresas para las que trabaja el casino (cuyos empleados pueden consumir).
+     */
+    public function empresas(): BelongsToMany
+    {
+        return $this->belongsToMany(Empresa::class, 'casino_empresa', 'id_casino', 'id_empresa');
+    }
+
+    /**
+     * Empresa principal (para facturación/correos). Mantiene compatibilidad con id_empresa.
      */
     public function empresa(): BelongsTo
     {
         return $this->belongsTo(Empresa::class, 'id_empresa', 'id_empresa');
+    }
+
+    /**
+     * IDs de empresas asignadas al casino (empresas cuyos empleados pueden consumir).
+     */
+    public function getEmpresasIdsAttribute(): array
+    {
+        return $this->empresas()->pluck('empresas.id_empresa')->toArray();
     }
 
     /**

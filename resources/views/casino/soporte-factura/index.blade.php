@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
-@section('title', 'Cuenta de cobro - ' . config('app.name'))
-@section('page-title', 'Cuenta de cobro')
+@section('title', 'Soporte para Factura - ' . config('app.name'))
+@section('page-title', 'Soporte para Factura')
 
 @section('content')
 <div class="space-y-6 max-w-2xl">
@@ -16,10 +16,10 @@
         </div>
     @endif
 
-    {{-- Formulario: generar nueva cuenta de cobro --}}
+    {{-- Formulario: generar nuevo soporte para factura --}}
     <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 class="text-lg font-semibold text-slate-800 mb-4">Generar cuenta de cobro</h2>
-        <form method="post" action="{{ route('casino.cuenta-cobro.generar') }}" class="space-y-4">
+        <h2 class="text-lg font-semibold text-slate-800 mb-4">Generar soporte para factura</h2>
+        <form method="post" action="{{ route('casino.soporte-factura.generar') }}" class="space-y-4">
             @csrf
             <div>
                 <label for="id_casino" class="block text-sm font-medium text-slate-700 mb-1">Casino / Punto</label>
@@ -55,7 +55,7 @@
     {{-- Resumen y acciones tras generar --}}
     @if($cuentaGenerada)
     <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 class="text-lg font-semibold text-slate-800 mb-4">Cuenta generada</h2>
+        <h2 class="text-lg font-semibold text-slate-800 mb-4">Soporte generado</h2>
         <div class="grid gap-4 sm:grid-cols-2 mb-6">
             <div class="rounded-lg bg-slate-50 p-4">
                 <p class="text-sm font-medium text-slate-500">Total almuerzos / vales</p>
@@ -70,7 +70,7 @@
             {{ $cuentaGenerada->casino->nombre }} — {{ $cuentaGenerada->fecha_inicio->format('d/m/Y') }} al {{ $cuentaGenerada->fecha_fin->format('d/m/Y') }}
         </p>
         <div class="flex flex-wrap gap-3">
-            <a href="{{ route('casino.cuenta-cobro.descargar', $cuentaGenerada->id_cuenta) }}"
+            <a href="{{ route('casino.soporte-factura.descargar', $cuentaGenerada->id_cuenta) }}"
                class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-white font-medium hover:bg-slate-700">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Descargar PDF
@@ -82,7 +82,7 @@
             @if(count($correosEmpresa) > 0)
                 <p class="text-sm text-slate-600 mb-2">Se enviará a los correos de la empresa: <span class="font-medium">{{ implode(', ', $correosEmpresa) }}</span></p>
             @endif
-            <form method="post" action="{{ route('casino.cuenta-cobro.enviar', $cuentaGenerada->id_cuenta) }}" class="inline">
+            <form method="post" action="{{ route('casino.soporte-factura.enviar', $cuentaGenerada->id_cuenta) }}" class="inline">
                 @csrf
                 <div class="inline-flex flex-wrap items-center gap-2">
                     @if(count($correosEmpresa) === 0)

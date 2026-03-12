@@ -30,6 +30,7 @@ class Usuario extends Authenticatable
         'id_sede_principal',
         'id_rol',
         'id_tipo_usuario',
+        'id_empresa_temporal',
         'codigo_qr',
         'activo',
     ];
@@ -111,6 +112,14 @@ class Usuario extends Authenticatable
     public function tipoUsuario(): BelongsTo
     {
         return $this->belongsTo(TipoUsuario::class, 'id_tipo_usuario', 'id_tipo_usuario');
+    }
+
+    /**
+     * Empresa temporal (solo cuando tipo de usuario es Temporal).
+     */
+    public function empresaTemporal(): BelongsTo
+    {
+        return $this->belongsTo(EmpresaTemporal::class, 'id_empresa_temporal', 'id_empresa_temporal');
     }
 
     /**

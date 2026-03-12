@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Casino;
 use App\Models\HorarioConsumo;
 use App\Models\RegistroConsumo;
 use App\Models\Usuario;
@@ -82,6 +83,13 @@ class ConsumoValidarQrController extends Controller
                     'mensaje' => 'Este consumo corresponde a otro punto de entrega. Seleccione el casino correcto.',
                 ], 400);
             }
+            $casino = Casino::find($idCasino);
+            if ($casino && ! $casino->empresas()->where('empresas.id_empresa', $consumo->id_empresa)->exists()) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'Este consumo no corresponde a una empresa atendida por este casino.',
+                ], 403);
+            }
         } else {
             // Formato legacy: codigo_qr del usuario (tabla usuarios)
             $usuario = Usuario::where('codigo_qr', $codigoQr)
@@ -117,6 +125,13 @@ class ConsumoValidarQrController extends Controller
                     'ok' => false,
                     'mensaje' => 'No hay consumo solicitado para este horario (' . $horario->nombre . ').',
                 ], 404);
+            }
+            $casino = Casino::find($idCasino);
+            if ($casino && ! $casino->empresas()->where('empresas.id_empresa', $consumo->id_empresa)->exists()) {
+                return response()->json([
+                    'ok' => false,
+                    'mensaje' => 'Este consumo no corresponde a una empresa atendida por este casino.',
+                ], 403);
             }
         }
 

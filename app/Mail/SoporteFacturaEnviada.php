@@ -11,7 +11,7 @@ use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 
-class CuentaCobroEnviada extends Mailable
+class SoporteFacturaEnviada extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -25,7 +25,7 @@ class CuentaCobroEnviada extends Mailable
         $rango = $this->cuenta->fecha_inicio->format('d/m/Y') . ' - ' . $this->cuenta->fecha_fin->format('d/m/Y');
 
         return new Envelope(
-            subject: 'Cuenta de cobro - ' . $casino . ' (' . $rango . ')',
+            subject: 'Soporte para factura - ' . $casino . ' (' . $rango . ')',
             from: config('mail.from.address'),
             replyTo: [config('mail.from.address')],
         );
@@ -34,12 +34,12 @@ class CuentaCobroEnviada extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.cuenta-cobro-enviada',
+            view: 'emails.soporte-factura-enviada',
         );
     }
 
     /**
-     * Adjuntar el PDF de la cuenta de cobro.
+     * Adjuntar el PDF del soporte para factura.
      */
     public function attachments(): array
     {
@@ -47,7 +47,7 @@ class CuentaCobroEnviada extends Mailable
             return [];
         }
 
-        $nombreArchivo = 'cuenta-cobro-' . $this->cuenta->id_cuenta . '.pdf';
+        $nombreArchivo = 'soporte-factura-' . $this->cuenta->id_cuenta . '.pdf';
 
         return [
             Attachment::fromPath(Storage::disk('local')->path($this->cuenta->archivo_pdf))

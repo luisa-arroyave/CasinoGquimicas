@@ -16,7 +16,7 @@ class CasinoController extends Controller
 {
     public function index(): View
     {
-        $casinos = Casino::with('empresa')->orderBy('nombre')->paginate(15);
+        $casinos = Casino::with('empresas')->orderBy('nombre')->paginate(15);
         return view('admin.casinos.index', compact('casinos'));
     }
 
@@ -33,13 +33,23 @@ class CasinoController extends Controller
         $valid = $request->validate([
             'NIT' => 'required|string|max:20',
             'nombre' => 'required|string|max:255',
-            'id_empresa' => 'required|exists:empresas,id_empresa',
+            'empresas' => 'required|array',
+            'empresas.*' => 'exists:empresas,id_empresa',
             'id_sede' => 'nullable|exists:sedes,id_sede',
             'tipo_casino' => 'nullable|string|max:50',
             'activo' => 'boolean',
+        ], [
+            'empresas.required' => 'Debe asignar al menos una empresa al casino.',
         ]);
         $valid['activo'] = $request->boolean('activo');
+        $empresasIds = array_values(array_filter(array_map('intval', $valid['empresas'] ?? [])));
+        if (empty($empresasIds)) {
+            return back()->withInput()->withErrors(['empresas' => 'Debe asignar al menos una empresa al casino.']);
+        }
+        unset($valid['empresas']);
+        $valid['id_empresa'] = $empresasIds[0]; // Primera empresa para compatibilidad
         $casino = Casino::create($valid);
+        $casino->empresas()->sync($empresasIds);
 
         $this->syncPreciosFromRequest($request, $casino);
 
@@ -51,7 +61,7 @@ class CasinoController extends Controller
         $empresas = Empresa::where('activa', true)->orderBy('nombre')->get();
         $sedes = Sede::orderBy('nombre')->get();
         $horarios = HorarioConsumo::where('activo', true)->orderBy('hora_inicio')->get();
-        $casino->load('precios.horarioConsumo');
+        $casino->load(['precios.horarioConsumo', 'empresas']);
         return view('admin.casinos.edit', compact('casino', 'empresas', 'sedes', 'horarios'));
     }
 
@@ -60,13 +70,23 @@ class CasinoController extends Controller
         $valid = $request->validate([
             'NIT' => 'required|string|max:20',
             'nombre' => 'required|string|max:255',
-            'id_empresa' => 'required|exists:empresas,id_empresa',
+            'empresas' => 'required|array',
+            'empresas.*' => 'exists:empresas,id_empresa',
             'id_sede' => 'nullable|exists:sedes,id_sede',
             'tipo_casino' => 'nullable|string|max:50',
             'activo' => 'boolean',
+        ], [
+            'empresas.required' => 'Debe asignar al menos una empresa al casino.',
         ]);
         $valid['activo'] = $request->boolean('activo');
+        $empresasIds = array_values(array_filter(array_map('intval', $valid['empresas'] ?? [])));
+        if (empty($empresasIds)) {
+            return back()->withInput()->withErrors(['empresas' => 'Debe asignar al menos una empresa al casino.']);
+        }
+        unset($valid['empresas']);
+        $valid['id_empresa'] = $empresasIds[0];
         $casino->update($valid);
+        $casino->empresas()->sync($empresasIds);
 
         $this->syncPreciosFromRequest($request, $casino);
 

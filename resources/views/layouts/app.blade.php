@@ -60,9 +60,12 @@
                         <a href="{{ route('admin.visitantes.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.visitantes.*') ? 'bg-slate-800 text-white' : '' }}">Visitantes</a>
                         <a href="{{ route('admin.usuarios.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.usuarios.*') ? 'bg-slate-800 text-white' : '' }}">Usuarios</a>
                         <a href="{{ route('admin.consumos-manuales.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.consumos-manuales.*') ? 'bg-slate-800 text-white' : '' }}">Registro manual consumos</a>
+                        <a href="{{ route('reportes.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('reportes.*') ? 'bg-slate-800 text-white' : '' }}">Reporte de Consumos</a>
+                        <a href="{{ route('admin.areas.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.areas.*') ? 'bg-slate-800 text-white' : '' }}">Áreas</a>
                         <a href="{{ route('admin.roles.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.roles.*') ? 'bg-slate-800 text-white' : '' }}">Roles</a>
                         <a href="{{ route('admin.tipos-usuario.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.tipos-usuario.*') ? 'bg-slate-800 text-white' : '' }}">Tipos de usuario</a>
                         <a href="{{ route('admin.sedes.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.sedes.*') ? 'bg-slate-800 text-white' : '' }}">Sedes</a>
+                        <a href="{{ route('admin.empresas-temporales.index') }}" class="flex items-center gap-3 pl-4 pr-3 py-2 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('admin.empresas-temporales.*') ? 'bg-slate-800 text-white' : '' }}">Empresa Temporal</a>
                     </div>
                     @endrole
 
@@ -71,10 +74,14 @@
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
                         <span>Solicitar consumo</span>
                     </a>
+                    <a href="{{ route('consumo-otra-sede.create') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('consumo-otra-sede.*') ? 'bg-slate-800 text-white' : '' }}">
+                        <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                        <span>Consumo en otra sede</span>
+                    </a>
                     @endrole
 
                     @role('gestionhumana')
-                    <a href="{{ route('gestion-humana.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('gestion-humana.*') ? 'bg-slate-800 text-white' : '' }}">
+                    <a href="{{ route('reportes.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('reportes.*') ? 'bg-slate-800 text-white' : '' }}">
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         <span>Reportes consumos</span>
                     </a>
@@ -93,9 +100,9 @@
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
                         <span>Registro Manual</span>
                     </a>
-                    <a href="{{ route('casino.cuenta-cobro.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.cuenta-cobro.*') ? 'bg-slate-800 text-white' : '' }}">
+                    <a href="{{ route('casino.soporte-factura.index') }}" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white transition-colors {{ request()->routeIs('casino.soporte-factura.*') ? 'bg-slate-800 text-white' : '' }}">
                         <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v2M9 5h6M9 5v2m0 4v6m0-6h6m-6 6h6m-6 6v-6"/></svg>
-                        <span>Cuenta de cobro</span>
+                        <span>Soporte para Factura</span>
                     </a>
                     @endrole
 
@@ -131,8 +138,10 @@
                 </div>
                 <div class="flex items-center gap-2 sm:gap-3">
                     <span class="hidden sm:inline text-sm text-slate-600 truncate max-w-[120px]">{{ auth()->user()->name ?? '' }}</span>
+                    @if((auth()->user()->role ?? 'empleado') !== 'empleado')
                     @php $roleLabel = config('roles.labels.'.(auth()->user()->role ?? 'empleado'), ucfirst(auth()->user()->role ?? 'empleado')); @endphp
                     <span class="hidden sm:inline-flex items-center px-2.5 py-1 text-xs font-medium rounded-md bg-slate-100 text-slate-700">{{ $roleLabel }}</span>
+                    @endif
                     <form method="POST" action="{{ route('logout') }}" class="inline">
                         @csrf
                         <button type="submit" class="inline-flex items-center justify-center gap-2 min-h-[44px] px-3 py-2.5 sm:py-2 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 active:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors touch-manipulation">

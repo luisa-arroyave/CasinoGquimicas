@@ -34,11 +34,13 @@ class CasinoPanelController extends Controller
             $casino = $casinos->first();
         }
         $idCasino = $casino?->id_casino;
+        $empresasIds = $casino ? $casino->empresas()->pluck('empresas.id_empresa')->toArray() : [];
 
         $consumos = RegistroConsumo::query()
             ->where('id_casino', $idCasino)
             ->where('estado', 'ENTREGADO')
             ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta])
+            ->when(! empty($empresasIds), fn ($q) => $q->whereIn('id_empresa', $empresasIds))
             ->with(['usuario', 'visitante', 'horarioConsumo', 'empresa'])
             ->orderBy('fecha_consumo')
             ->orderBy('hora_consumo')
@@ -80,10 +82,17 @@ class CasinoPanelController extends Controller
         $fechaDesde = $request->input('fecha_desde', Carbon::today()->toDateString());
         $fechaHasta = $request->input('fecha_hasta', Carbon::today()->toDateString());
 
-        $consumos = RegistroConsumo::query()
+        $casino = \App\Models\Casino::find($idCasino);
+        $empresasIds = $casino?->empresas()->pluck('empresas.id_empresa')->toArray() ?? [];
+
+        $consumosQuery = RegistroConsumo::query()
             ->where('id_casino', $idCasino)
             ->where('estado', 'ENTREGADO')
-            ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta])
+            ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta]);
+        if (! empty($empresasIds)) {
+            $consumosQuery->whereIn('id_empresa', $empresasIds);
+        }
+        $consumos = $consumosQuery
             ->with(['usuario:id_usuario,nombres,documento', 'visitante:id_visitante,nombre,documento', 'horarioConsumo:id_horario,nombre', 'empresa:id_empresa,nombre'])
             ->orderBy('fecha_consumo')
             ->orderBy('hora_consumo')

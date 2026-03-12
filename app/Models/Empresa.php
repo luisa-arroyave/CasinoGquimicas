@@ -27,7 +27,7 @@ class Empresa extends Model
     ];
 
     /**
-     * Lista de correos para cuenta de cobro (parseados desde correos_cuenta_cobro).
+     * Lista de correos para soporte de factura (parseados desde correos_cuenta_cobro).
      *
      * @return array<int, string>
      */
@@ -54,11 +54,11 @@ class Empresa extends Model
     }
 
     /**
-     * Casinos/restaurantes de la empresa.
+     * Casinos que atienden a esta empresa (cuyos empleados pueden consumir ahí).
      */
-    public function casinos(): HasMany
+    public function casinos(): BelongsToMany
     {
-        return $this->hasMany(Casino::class, 'id_empresa', 'id_empresa');
+        return $this->belongsToMany(Casino::class, 'casino_empresa', 'id_empresa', 'id_casino');
     }
 
     /**

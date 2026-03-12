@@ -87,6 +87,7 @@ class DashboardController extends Controller
             if ($idUsuario) {
                 $consumosQuincena1_15 = RegistroConsumo::with(['horarioConsumo'])
                     ->where('id_usuario', $idUsuario)
+                    ->where('estado', 'ENTREGADO')
                     ->whereYear('fecha_consumo', $año)
                     ->whereMonth('fecha_consumo', $mes)
                     ->whereDay('fecha_consumo', '<=', 15)
@@ -95,6 +96,7 @@ class DashboardController extends Controller
                     ->get();
                 $consumosQuincena16_31 = RegistroConsumo::with(['horarioConsumo'])
                     ->where('id_usuario', $idUsuario)
+                    ->where('estado', 'ENTREGADO')
                     ->whereYear('fecha_consumo', $año)
                     ->whereMonth('fecha_consumo', $mes)
                     ->whereDay('fecha_consumo', '>=', 16)

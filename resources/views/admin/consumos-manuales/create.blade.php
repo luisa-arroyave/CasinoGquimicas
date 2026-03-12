@@ -31,15 +31,27 @@
             </select>
             @error('id_usuario')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
         </div>
-        <div id="campo-visitante" class="hidden">
-            <label for="id_visitante" class="block text-sm font-medium text-slate-700">Visitante</label>
-            <select name="id_visitante" id="id_visitante" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
-                <option value="">Seleccione visitante</option>
-                @foreach($visitantes as $v)
-                    <option value="{{ $v->id_visitante }}" {{ old('id_visitante') == $v->id_visitante ? 'selected' : '' }}>{{ $v->nombre }} - {{ $v->documento }}</option>
-                @endforeach
-            </select>
-            @error('id_visitante')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+        <div id="campo-visitante" class="hidden space-y-4">
+            <div>
+                <label for="id_visitante" class="block text-sm font-medium text-slate-700">Visitante</label>
+                <select name="id_visitante" id="id_visitante" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                    <option value="">Seleccione visitante</option>
+                    @foreach($visitantes as $v)
+                        <option value="{{ $v->id_visitante }}" {{ old('id_visitante') == $v->id_visitante ? 'selected' : '' }}>{{ $v->nombre }} - {{ $v->documento }}</option>
+                    @endforeach
+                </select>
+                @error('id_visitante')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="id_area_visita" class="block text-sm font-medium text-slate-700">Área de visita</label>
+                <select name="id_area_visita" id="id_area_visita" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                    <option value="">Seleccione área</option>
+                    @foreach($areasVisita as $a)
+                        <option value="{{ $a->id_area_visita }}" {{ old('id_area_visita') == $a->id_area_visita ? 'selected' : '' }}>{{ $a->nombre }}</option>
+                    @endforeach
+                </select>
+                @error('id_area_visita')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
         </div>
         <div>
             <label for="id_empresa" class="block text-sm font-medium text-slate-700">Empresa</label>
@@ -99,11 +111,6 @@
             <input type="text" name="direccion_entrega" id="direccion_entrega" value="{{ old('direccion_entrega') }}" class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500" placeholder="Calle, numero, piso...">
             @error('direccion_entrega')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
         </div>
-        <div>
-            <label for="estado" class="block text-sm font-medium text-slate-700">Estado</label>
-            <input type="text" name="estado" id="estado" value="{{ old('estado', 'entregado') }}" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500" placeholder="Ej. ENTREGADO, PENDIENTE, SOLICITADO">
-            @error('estado')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-        </div>
         <div class="flex gap-3 pt-2">
             <button type="submit" class="px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700">Registrar consumo</button>
             <a href="{{ route('admin.consumos-manuales.index') }}" class="px-4 py-2 border border-slate-300 rounded-lg text-slate-700 hover:bg-slate-50">Cancelar</a>
@@ -134,7 +141,10 @@ document.querySelectorAll('input[name="tipo_consumidor"]').forEach(function(radi
         document.getElementById('campo-usuario').classList.toggle('hidden', !esUsuario);
         document.getElementById('campo-visitante').classList.toggle('hidden', esUsuario);
         document.getElementById('id_usuario').required = esUsuario;
-        document.getElementById('id_visitante').required = !esUsuario;
+        var campoVisitante = document.getElementById('id_visitante');
+        var campoArea = document.getElementById('id_area_visita');
+        if (campoVisitante) campoVisitante.required = !esUsuario;
+        if (campoArea) campoArea.required = !esUsuario;
     });
 });
 var tipo = document.querySelector('input[name="tipo_consumidor"]:checked');

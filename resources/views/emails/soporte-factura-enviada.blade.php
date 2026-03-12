@@ -12,7 +12,7 @@
 </head>
 <body>
     <div class="box">
-        <p>Se adjunta la cuenta de cobro para contabilidad.</p>
+        <p>Se adjunta el soporte para factura para contabilidad.</p>
         <table>
             <tr><th>Casino</th><td>{{ $cuenta->casino->nombre ?? '—' }}</td></tr>
             <tr><th>Período</th><td>{{ $cuenta->fecha_inicio->format('d/m/Y') }} - {{ $cuenta->fecha_fin->format('d/m/Y') }}</td></tr>

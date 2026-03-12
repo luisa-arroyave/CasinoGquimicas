@@ -1,15 +1,29 @@
 @extends('layouts.app')
 
-@section('title', 'Gestión Humana - Reportes - ' . config('app.name'))
-@section('page-title', 'Gestión Humana - Reportes')
+@section('title', 'Reportes para Descuentos de Casino - ' . config('app.name'))
+@section('page-title', 'Reportes para Descuentos de Casino')
 
 @section('content')
 <div class="space-y-4 sm:space-y-6">
+    @if(session('error'))
+        <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 text-sm">
+            {{ session('error') }}
+        </div>
+    @endif
+    @if($errors->any())
+        <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800 text-sm">
+            <ul class="list-disc list-inside space-y-1">
+                @foreach($errors->all() as $err)
+                    <li>{{ $err }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
     {{-- Filtros y descarga --}}
     <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
         <h2 class="text-base sm:text-lg font-semibold text-slate-800 mb-4">Reportes por fechas</h2>
-        <form method="get" action="{{ route('gestion-humana.index') }}" class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <form method="get" action="{{ route('reportes.index') }}" class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                     <label for="fecha_desde" class="block text-sm font-medium text-slate-700 mb-1">Desde</label>
                     <input type="date" name="fecha_desde" id="fecha_desde" value="{{ $fecha_desde }}" required
@@ -20,39 +34,53 @@
                     <input type="date" name="fecha_hasta" id="fecha_hasta" value="{{ $fecha_hasta }}" required
                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 min-h-[48px] text-slate-900 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20">
                 </div>
-                <div class="sm:col-span-2 lg:col-span-1">
-                    <label for="id_empresa" class="block text-sm font-medium text-slate-700 mb-1">Empresa (opcional)</label>
-                    <select name="id_empresa" id="id_empresa" class="w-full rounded-lg border border-slate-300 px-4 py-2.5 min-h-[48px] text-slate-900 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20">
-                        <option value="">Todas las empresas</option>
-                        @foreach($empresas as $e)
-                            <option value="{{ $e->id_empresa }}" {{ $id_empresa == $e->id_empresa ? 'selected' : '' }}>{{ $e->nombre }}</option>
-                        @endforeach
-                    </select>
+                <div>
+                    <label for="busqueda_persona" class="block text-sm font-medium text-slate-700 mb-1">Nombre o cédula (opcional)</label>
+                    <input type="text" name="busqueda_persona" id="busqueda_persona" value="{{ $busqueda_persona ?? '' }}"
+                           placeholder="Filtrar por persona..."
+                           class="w-full rounded-lg border border-slate-300 px-4 py-2.5 min-h-[48px] text-slate-900 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20">
+                </div>
+            </div>
+            <div>
+                <p class="block text-sm font-medium text-slate-700 mb-2">Empresas (opcional)</p>
+                <p class="text-xs text-slate-500 mb-2">Solo empresas habilitadas para usted. Deje todas sin marcar para incluir todas.</p>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-32 overflow-y-auto rounded-lg border border-slate-300 bg-slate-50/50 p-3">
+                    @php $empresasIds = old('empresas', $empresas_seleccionadas ?? []); @endphp
+                    @foreach($empresas as $e)
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="empresas[]" value="{{ $e->id_empresa }}" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500"
+                                   {{ in_array($e->id_empresa, $empresasIds) ? 'checked' : '' }}>
+                            <span class="text-sm text-slate-700">{{ $e->nombre }}</span>
+                        </label>
+                    @endforeach
+                    @if($empresas->isEmpty())
+                        <p class="text-sm text-slate-500 col-span-full">No hay empresas habilitadas para sus reportes.</p>
+                    @endif
                 </div>
             </div>
             <div class="flex flex-col sm:flex-row gap-3">
                 <button type="submit" class="min-h-[48px] px-4 py-2.5 rounded-lg bg-slate-800 text-white font-medium hover:bg-slate-700 active:bg-slate-600 transition touch-manipulation w-full sm:w-auto">Consultar</button>
             </div>
         </form>
-        <div class="mt-4 flex flex-col sm:flex-row flex-wrap gap-3">
-            <form method="get" action="{{ route('gestion-humana.exportar-pdf') }}" class="inline w-full sm:w-auto" target="_blank">
-                <input type="hidden" name="fecha_desde" value="{{ $fecha_desde }}">
-                <input type="hidden" name="fecha_hasta" value="{{ $fecha_hasta }}">
-                @if($id_empresa)<input type="hidden" name="id_empresa" value="{{ $id_empresa }}">@endif
-                <button type="submit" class="w-full sm:w-auto min-h-[48px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 active:bg-red-800 transition touch-manipulation">
+        <div class="mt-4">
+            <p class="text-sm font-medium text-slate-700 mb-2">Reportes especiales en Excel (.xlsx)</p>
+            <form id="form-reportes-excel" class="flex flex-col sm:flex-row flex-wrap items-end gap-3">
+                <div class="flex-1 min-w-[200px]">
+                    <label for="tipo_reporte" class="block text-xs text-slate-500 mb-1">Seleccione el informe a descargar</label>
+                    <select name="tipo_reporte" id="tipo_reporte" class="w-full rounded-lg border border-slate-300 px-4 py-2.5 min-h-[48px] text-slate-900 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20">
+                        <option value="">— Seleccione un informe —</option>
+                        <option value="nomina">Reporte de Nómina</option>
+                        <option value="colaborador">Informe por Colaborador</option>
+                        <option value="temporales">Reporte Temporales</option>
+                    </select>
+                </div>
+                <button type="submit" id="btn-descargar-reporte" class="min-h-[48px] px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 active:bg-emerald-800 transition touch-manipulation inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
                     <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    Descargar PDF
+                    Descargar
                 </button>
             </form>
-            <form method="get" action="{{ route('gestion-humana.exportar-excel') }}" class="inline w-full sm:w-auto">
-                <input type="hidden" name="fecha_desde" value="{{ $fecha_desde }}">
-                <input type="hidden" name="fecha_hasta" value="{{ $fecha_hasta }}">
-                @if($id_empresa)<input type="hidden" name="id_empresa" value="{{ $id_empresa }}">@endif
-                <button type="submit" class="w-full sm:w-auto min-h-[48px] inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 active:bg-emerald-800 transition touch-manipulation">
-                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    Exportar Excel (CSV)
-                </button>
-            </form>
+            <p class="text-xs text-slate-500 mt-2">Para el Informe por Colaborador debe ingresar nombre o cédula en el campo de búsqueda.</p>
+        </div>
         </div>
     </div>
 
@@ -135,3 +163,55 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+(function() {
+    const form = document.getElementById('form-reportes-excel');
+    const select = document.getElementById('tipo_reporte');
+    const btn = document.getElementById('btn-descargar-reporte');
+
+    const rutas = {
+        nomina: @json(route('reportes.exportar-excel-nomina')),
+        colaborador: @json(route('reportes.exportar-excel-informe-colaborador')),
+        temporales: @json(route('reportes.exportar-excel-temporales'))
+    };
+
+    select.addEventListener('change', function() {
+        btn.disabled = !this.value;
+    });
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const tipo = select.value;
+        if (!tipo) return;
+
+        if (tipo === 'colaborador') {
+            const busqueda = document.getElementById('busqueda_persona')?.value?.trim() || '';
+            if (!busqueda) {
+                alert('Para el Informe por Colaborador debe ingresar nombre o cédula en el campo de búsqueda.');
+                return;
+            }
+        }
+
+        const params = new URLSearchParams();
+        const fechaDesde = document.getElementById('fecha_desde')?.value;
+        const fechaHasta = document.getElementById('fecha_hasta')?.value;
+        if (fechaDesde) params.set('fecha_desde', fechaDesde);
+        if (fechaHasta) params.set('fecha_hasta', fechaHasta);
+
+        document.querySelectorAll('input[name="empresas[]"]:checked').forEach(function(cb) {
+            params.append('empresas[]', cb.value);
+        });
+
+        const busquedaPersona = document.getElementById('busqueda_persona')?.value?.trim() || '';
+        if (busquedaPersona) params.set('busqueda_persona', busquedaPersona);
+
+        const baseUrl = rutas[tipo];
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        const url = baseUrl + sep + params.toString();
+        window.location.href = url;
+    });
+})();
+</script>
+@endpush

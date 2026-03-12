@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Casino;
 use App\Models\Empresa;
+use App\Models\EmpresaTemporal;
 use App\Models\Role;
 use App\Models\Sede;
 use App\Models\TipoUsuario;
@@ -40,9 +41,10 @@ class UsuarioController extends Controller
         $empresas = Empresa::orderBy('nombre')->get();
         $roles = Role::orderBy('nombre')->get();
         $tipos = TipoUsuario::orderBy('nombre')->get();
+        $empresasTemporales = EmpresaTemporal::where('activa', true)->orderBy('nombre')->get();
         $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
         $sedes = Sede::orderBy('nombre')->get();
-        return view('admin.usuarios.create', compact('empresas', 'roles', 'tipos', 'casinos', 'sedes'));
+        return view('admin.usuarios.create', compact('empresas', 'roles', 'tipos', 'empresasTemporales', 'casinos', 'sedes'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -55,6 +57,7 @@ class UsuarioController extends Controller
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_rol' => 'required|exists:roles,id_rol',
             'id_tipo_usuario' => 'required|exists:tipos_usuario,id_tipo_usuario',
+            'id_empresa_temporal' => 'nullable|exists:empresas_temporales,id_empresa_temporal',
             'codigo_qr' => 'nullable|string|max:100',
             'activo' => 'boolean',
             'empresas' => 'nullable|array',
@@ -76,6 +79,14 @@ class UsuarioController extends Controller
         if (! empty($valid['password'])) {
             $valid['password_hash'] = Hash::make($valid['password']);
         }
+        $tipoUsuario = TipoUsuario::find($valid['id_tipo_usuario']);
+        if ($tipoUsuario && strtoupper(trim($tipoUsuario->nombre)) === 'TEMPORAL') {
+            if (! $request->filled('id_empresa_temporal')) {
+                return back()->withInput()->withErrors(['id_empresa_temporal' => 'Debe seleccionar una empresa temporal para usuarios con tipo Temporal.']);
+            }
+        } else {
+            $valid['id_empresa_temporal'] = null;
+        }
         unset($valid['password'], $valid['empresas'], $valid['sedes']);
         $usuario = Usuario::create($valid);
         $this->syncEmpresasAcceso($usuario, $request->input('empresas', []));
@@ -89,10 +100,11 @@ class UsuarioController extends Controller
         $empresas = Empresa::orderBy('nombre')->get();
         $roles = Role::orderBy('nombre')->get();
         $tipos = TipoUsuario::orderBy('nombre')->get();
+        $empresasTemporales = EmpresaTemporal::where('activa', true)->orderBy('nombre')->get();
         $usuario->load('sedesAcceso');
         $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
         $sedes = Sede::orderBy('nombre')->get();
-        return view('admin.usuarios.edit', compact('usuario', 'empresas', 'roles', 'tipos', 'casinos', 'sedes'));
+        return view('admin.usuarios.edit', compact('usuario', 'empresas', 'roles', 'tipos', 'empresasTemporales', 'casinos', 'sedes'));
     }
 
     public function update(Request $request, Usuario $usuario): RedirectResponse
@@ -105,6 +117,7 @@ class UsuarioController extends Controller
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_rol' => 'required|exists:roles,id_rol',
             'id_tipo_usuario' => 'required|exists:tipos_usuario,id_tipo_usuario',
+            'id_empresa_temporal' => 'nullable|exists:empresas_temporales,id_empresa_temporal',
             'codigo_qr' => 'nullable|string|max:100',
             'activo' => 'boolean',
             'empresas' => 'nullable|array',
@@ -122,6 +135,14 @@ class UsuarioController extends Controller
             }
         } else {
             $valid['id_casino_asignado'] = null;
+        }
+        $tipoUsuario = TipoUsuario::find($valid['id_tipo_usuario']);
+        if ($tipoUsuario && strtoupper(trim($tipoUsuario->nombre)) === 'TEMPORAL') {
+            if (! $request->filled('id_empresa_temporal')) {
+                return back()->withInput()->withErrors(['id_empresa_temporal' => 'Debe seleccionar una empresa temporal para usuarios con tipo Temporal.']);
+            }
+        } else {
+            $valid['id_empresa_temporal'] = null;
         }
         if (! empty($valid['password'])) {
             $valid['password_hash'] = Hash::make($valid['password']);

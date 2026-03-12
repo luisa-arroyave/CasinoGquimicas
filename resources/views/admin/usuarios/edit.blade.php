@@ -64,10 +64,25 @@
                 <label for="id_tipo_usuario" class="block text-sm font-medium text-slate-700 mb-1">Tipo usuario</label>
                 <select name="id_tipo_usuario" id="id_tipo_usuario" required class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
                     @foreach($tipos as $t)
-                        <option value="{{ $t->id_tipo_usuario }}" {{ old('id_tipo_usuario', $usuario->id_tipo_usuario) == $t->id_tipo_usuario ? 'selected' : '' }}>{{ $t->nombre }}</option>
+                        <option value="{{ $t->id_tipo_usuario }}" data-tipo-nombre="{{ $t->nombre }}" {{ old('id_tipo_usuario', $usuario->id_tipo_usuario) == $t->id_tipo_usuario ? 'selected' : '' }}>{{ $t->nombre }}</option>
                     @endforeach
                 </select>
                 @error('id_tipo_usuario')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+        </div>
+
+        {{-- Empresa temporal (solo cuando tipo es Temporal) --}}
+        <div id="bloque-empresa-temporal" class="hidden rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <p class="text-sm font-medium text-slate-700 mb-2">Empresa temporal</p>
+            <p class="text-xs text-slate-500 mb-2">Seleccione la empresa temporal del colaborador.</p>
+            <div class="max-w-sm">
+                <select name="id_empresa_temporal" id="id_empresa_temporal" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                    <option value="">— Seleccione empresa temporal —</option>
+                    @foreach($empresasTemporales as $et)
+                        <option value="{{ $et->id_empresa_temporal }}" {{ old('id_empresa_temporal', $usuario->id_empresa_temporal) == $et->id_empresa_temporal ? 'selected' : '' }}>{{ $et->nombre }}</option>
+                    @endforeach
+                </select>
+                @error('id_empresa_temporal')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
         </div>
 
@@ -151,10 +166,28 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var sel = document.getElementById('id_rol');
+    var selTipo = document.getElementById('id_tipo_usuario');
     var bloque = document.getElementById('bloque-empresas-acceso');
     var bloqueCasino = document.getElementById('bloque-casino-asignado');
     var selectCasino = document.getElementById('id_casino_asignado');
     var bloqueSede = document.getElementById('bloque-sede');
+    var bloqueEmpresaTemp = document.getElementById('bloque-empresa-temporal');
+    var selectEmpresaTemp = document.getElementById('id_empresa_temporal');
+    function toggleTipo() {
+        var optTipo = selTipo ? selTipo.options[selTipo.selectedIndex] : null;
+        var tipoNombre = optTipo ? (optTipo.getAttribute('data-tipo-nombre') || optTipo.textContent || '').trim().toLowerCase() : '';
+        if (bloqueEmpresaTemp) {
+            if (tipoNombre === 'temporal') {
+                bloqueEmpresaTemp.classList.remove('hidden');
+                if (selectEmpresaTemp) selectEmpresaTemp.setAttribute('required', 'required');
+            } else {
+                bloqueEmpresaTemp.classList.add('hidden');
+                if (selectEmpresaTemp) { selectEmpresaTemp.value = ''; selectEmpresaTemp.removeAttribute('required'); }
+            }
+        }
+    }
+    if (selTipo) selTipo.addEventListener('change', toggleTipo);
+    toggleTipo();
     function toggle() {
         var opt = sel.options[sel.selectedIndex];
         var nombre = opt ? (opt.getAttribute('data-role-nombre') || '') : '';
