@@ -13,7 +13,11 @@ use App\Models\Usuario;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class UsuarioController extends Controller
 {
@@ -27,8 +31,7 @@ class UsuarioController extends Controller
             $q = $request->buscar;
             $query->where(function ($qry) use ($q) {
                 $qry->where('documento', 'like', "%{$q}%")
-                    ->orWhere('nombres', 'like', "%{$q}%")
-                    ->orWhere('email', 'like', "%{$q}%");
+                    ->orWhere('nombres', 'like', "%{$q}%");
             });
         }
         $usuarios = $query->orderBy('nombres')->paginate(15)->withQueryString();
@@ -52,8 +55,6 @@ class UsuarioController extends Controller
         $valid = $request->validate([
             'documento' => 'required|string|max:50',
             'nombres' => 'required|string|max:255',
-            'email' => 'nullable|email',
-            'password' => 'nullable|string|min:6|confirmed',
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_rol' => 'required|exists:roles,id_rol',
             'id_tipo_usuario' => 'required|exists:tipos_usuario,id_tipo_usuario',
@@ -76,9 +77,8 @@ class UsuarioController extends Controller
         } else {
             $valid['id_casino_asignado'] = null;
         }
-        if (! empty($valid['password'])) {
-            $valid['password_hash'] = Hash::make($valid['password']);
-        }
+        $valid['password_hash'] = Hash::make($valid['documento']);
+        $valid['cambiar_clave_obligatorio'] = true;
         $tipoUsuario = TipoUsuario::find($valid['id_tipo_usuario']);
         if ($tipoUsuario && strtoupper(trim($tipoUsuario->nombre)) === 'TEMPORAL') {
             if (! $request->filled('id_empresa_temporal')) {
@@ -87,7 +87,7 @@ class UsuarioController extends Controller
         } else {
             $valid['id_empresa_temporal'] = null;
         }
-        unset($valid['password'], $valid['empresas'], $valid['sedes']);
+        unset($valid['empresas'], $valid['sedes']);
         $usuario = Usuario::create($valid);
         $this->syncEmpresasAcceso($usuario, $request->input('empresas', []));
         $this->syncSedesAcceso($usuario, $request->input('sedes', []));
@@ -112,8 +112,6 @@ class UsuarioController extends Controller
         $valid = $request->validate([
             'documento' => 'required|string|max:50',
             'nombres' => 'required|string|max:255',
-            'email' => 'nullable|email',
-            'password' => 'nullable|string|min:6|confirmed',
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_rol' => 'required|exists:roles,id_rol',
             'id_tipo_usuario' => 'required|exists:tipos_usuario,id_tipo_usuario',
@@ -144,10 +142,7 @@ class UsuarioController extends Controller
         } else {
             $valid['id_empresa_temporal'] = null;
         }
-        if (! empty($valid['password'])) {
-            $valid['password_hash'] = Hash::make($valid['password']);
-        }
-        unset($valid['password'], $valid['empresas'], $valid['sedes']);
+        unset($valid['empresas'], $valid['sedes']);
         $usuario->update($valid);
         $this->syncEmpresasAcceso($usuario, $request->input('empresas', []));
         $this->syncSedesAcceso($usuario, $request->input('sedes', []));
@@ -179,5 +174,213 @@ class UsuarioController extends Controller
     {
         $usuario->delete();
         return redirect()->route('admin.usuarios.index')->with('success', 'Usuario eliminado correctamente.');
+    }
+
+    /**
+     * Resetear la contraseña del usuario al documento. Obliga a cambiar en próximo login.
+     */
+    public function resetearClave(Usuario $usuario): RedirectResponse
+    {
+        $usuario->password_hash = Hash::make($usuario->documento);
+        $usuario->cambiar_clave_obligatorio = true;
+        $usuario->save();
+
+        return back()->with('success', "Clave resetada. La contraseña temporal es el documento ({$usuario->documento}). El usuario deberá cambiarla en el próximo inicio de sesión.");
+    }
+
+    /**
+     * Descargar plantilla Excel para importar usuarios.
+     */
+    public function descargarPlantillaImportacion(): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $spreadsheet = new Spreadsheet();
+        $hoja = $spreadsheet->getActiveSheet();
+        $hoja->setTitle('Usuarios');
+
+        $headers = ['documento', 'nombres', 'empresa', 'rol', 'tipo_usuario', 'empresa_temporal', 'casino_asignado', 'sede_principal', 'activo'];
+        $hoja->fromArray($headers, null, 'A1');
+        $hoja->fromArray([
+            ['12345678', 'Juan Pérez', 'Mi Empresa', 'empleado', 'FIJO', '', '', 'Sede Central', 'Si'],
+            ['87654321', 'María López', 'Otra Empresa', 'empleado', 'TEMPORAL', 'Empresa Temp 1', '', 'Sede Norte', 'Si'],
+        ], null, 'A2');
+
+        $hojaRef = $spreadsheet->createSheet();
+        $hojaRef->setTitle('Referencia');
+        $hojaRef->setCellValue('A1', 'Columna');
+        $hojaRef->setCellValue('B1', 'Valores permitidos');
+        $hojaRef->setCellValue('A2', 'empresa');
+        $hojaRef->setCellValue('B2', 'Nombre exacto de la empresa (ver tabla empresas)');
+        $hojaRef->setCellValue('A3', 'rol');
+        $hojaRef->setCellValue('B3', 'empleado, administrador, gestionhumana, casino, operativo');
+        $hojaRef->setCellValue('A4', 'tipo_usuario');
+        $hojaRef->setCellValue('B4', 'FIJO, TEMPORAL, SENA, PASANTE, CONTRATISTA');
+        $hojaRef->setCellValue('A5', 'empresa_temporal');
+        $hojaRef->setCellValue('B5', 'Solo si tipo_usuario=TEMPORAL. Nombre de empresa temporal.');
+        $hojaRef->setCellValue('A6', 'casino_asignado');
+        $hojaRef->setCellValue('B6', 'Solo si rol=casino. Nombre del casino.');
+        $hojaRef->setCellValue('A7', 'sede_principal');
+        $hojaRef->setCellValue('B7', 'Nombre de la sede (para empleados).');
+        $hojaRef->setCellValue('A8', 'activo');
+        $hojaRef->setCellValue('B8', 'Si o No (default: Si)');
+
+        $tempPath = storage_path('app/temp/plantilla-importar-usuarios-' . uniqid() . '.xlsx');
+        if (! is_dir(dirname($tempPath))) {
+            mkdir(dirname($tempPath), 0755, true);
+        }
+        (new Xlsx($spreadsheet))->save($tempPath);
+        return response()->download($tempPath, 'plantilla-importar-usuarios.xlsx')->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Importar usuarios desde archivo Excel.
+     */
+    public function importar(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'archivo' => 'required|file|mimes:xlsx,xls,csv,txt|max:5120',
+        ], [
+            'archivo.required' => 'Seleccione un archivo.',
+            'archivo.mimes' => 'El archivo debe ser Excel (.xlsx, .xls) o CSV (.csv).',
+        ]);
+
+        $archivo = $request->file('archivo');
+        $ext = strtolower($archivo->getClientOriginalExtension());
+        $tempPath = $archivo->storeAs('temp', 'import-' . uniqid() . '.' . ($ext ?: 'xlsx'));
+        $fullPath = str_replace('\\', '/', Storage::path($tempPath));
+
+        if (! class_exists('ZipArchive') && in_array($ext, ['xlsx', 'xls'])) {
+            if (Storage::exists($tempPath)) {
+                Storage::delete($tempPath);
+            }
+            return back()->with('error', 'La extensión Zip de PHP no está habilitada. Use un archivo CSV en su lugar (guarde el Excel como CSV desde Excel).');
+        }
+
+        try {
+            $readerType = in_array($ext, ['csv', 'txt']) ? 'Csv' : 'Xlsx';
+            $reader = IOFactory::createReader($readerType);
+            $reader->setReadDataOnly(true);
+            if ($readerType === 'Csv') {
+                $reader->setDelimiter(',');
+                $reader->setEnclosure('"');
+            }
+            $spreadsheet = $reader->load($fullPath);
+        } catch (\Throwable $e) {
+            if (Storage::exists($tempPath)) {
+                Storage::delete($tempPath);
+            }
+            return back()->with('error', 'No se pudo leer el archivo: ' . $e->getMessage());
+        }
+        if (Storage::exists($tempPath)) {
+            Storage::delete($tempPath);
+        }
+        $hoja = $spreadsheet->getActiveSheet();
+        $filas = $hoja->toArray();
+
+        if (count($filas) < 2) {
+            return back()->with('error', 'El archivo no tiene datos. La primera fila debe ser encabezados y desde la fila 2 los usuarios.');
+        }
+
+        $encabezados = array_map('strtolower', array_map('trim', $filas[0]));
+        $creados = 0;
+        $errores = [];
+
+        for ($i = 1; $i < count($filas); $i++) {
+            $fila = $filas[$i];
+            $filaNum = $i + 1;
+            $row = array_combine(array_pad($encabezados, count($fila), ''), array_pad($fila, count($encabezados), ''));
+
+            $documento = trim((string) ($row['documento'] ?? ''));
+            $nombres = trim((string) ($row['nombres'] ?? ''));
+
+            if ($documento === '' && $nombres === '') {
+                continue;
+            }
+            if ($documento === '' || $nombres === '') {
+                $errores[] = "Fila {$filaNum}: documento y nombres son obligatorios.";
+                continue;
+            }
+
+            $empresa = Empresa::where('nombre', trim((string) ($row['empresa'] ?? '')))->first();
+            if (! $empresa) {
+                $errores[] = "Fila {$filaNum}: empresa no encontrada («{$row['empresa']}»).";
+                continue;
+            }
+
+            $rol = Role::where('nombre', trim((string) ($row['rol'] ?? '')))->first();
+            if (! $rol) {
+                $errores[] = "Fila {$filaNum}: rol no encontrado («{$row['rol']}»).";
+                continue;
+            }
+
+            $tipoUsuario = TipoUsuario::where('nombre', trim((string) ($row['tipo_usuario'] ?? '')))->first();
+            if (! $tipoUsuario) {
+                $errores[] = "Fila {$filaNum}: tipo_usuario no encontrado («{$row['tipo_usuario']}»).";
+                continue;
+            }
+
+            if (Usuario::where('documento', $documento)->exists()) {
+                $errores[] = "Fila {$filaNum}: ya existe un usuario con documento {$documento}.";
+                continue;
+            }
+
+            $idCasino = null;
+            if (strtolower($rol->nombre) === 'casino') {
+                $casino = Casino::where('nombre', trim((string) ($row['casino_asignado'] ?? '')))->where('activo', true)->first();
+                if (! $casino) {
+                    $errores[] = "Fila {$filaNum}: rol casino requiere casino_asignado válido.";
+                    continue;
+                }
+                $idCasino = $casino->id_casino;
+            }
+
+            $idEmpresaTemporal = null;
+            if (strtoupper(trim($tipoUsuario->nombre)) === 'TEMPORAL') {
+                $empTemp = EmpresaTemporal::where('nombre', trim((string) ($row['empresa_temporal'] ?? '')))->where('activa', true)->first();
+                if (! $empTemp) {
+                    $errores[] = "Fila {$filaNum}: tipo TEMPORAL requiere empresa_temporal válida.";
+                    continue;
+                }
+                $idEmpresaTemporal = $empTemp->id_empresa_temporal;
+            }
+
+            $idSede = null;
+            $sedeNombre = trim((string) ($row['sede_principal'] ?? ''));
+            if ($sedeNombre !== '') {
+                $sede = Sede::where('nombre', $sedeNombre)->first();
+                if ($sede) {
+                    $idSede = $sede->id_sede;
+                }
+            }
+
+            $activo = ! in_array(strtolower(trim((string) ($row['activo'] ?? 'Si'))), ['no', '0', 'false'], true);
+
+            Usuario::create([
+                'documento' => $documento,
+                'nombres' => $nombres,
+                'password_hash' => Hash::make($documento),
+                'cambiar_clave_obligatorio' => true,
+                'id_empresa' => $empresa->id_empresa,
+                'id_rol' => $rol->id_rol,
+                'id_tipo_usuario' => $tipoUsuario->id_tipo_usuario,
+                'id_empresa_temporal' => $idEmpresaTemporal,
+                'id_casino_asignado' => $idCasino,
+                'id_sede_principal' => $idSede,
+                'activo' => $activo,
+            ]);
+            $creados++;
+        }
+
+        if ($creados > 0) {
+            $msg = "Se importaron {$creados} usuario(s) correctamente.";
+            if (count($errores) > 0) {
+                $msg .= ' Errores: ' . implode(' ', array_slice($errores, 0, 5));
+                if (count($errores) > 5) {
+                    $msg .= ' (+' . (count($errores) - 5) . ' más)';
+                }
+            }
+            return back()->with('success', $msg);
+        }
+
+        return back()->with('error', count($errores) > 0 ? implode(' ', $errores) : 'No se importó ningún usuario. Revise el formato del archivo.');
     }
 }

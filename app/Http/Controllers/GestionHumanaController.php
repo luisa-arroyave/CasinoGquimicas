@@ -271,8 +271,12 @@ class GestionHumanaController extends Controller
 
         $spreadsheet = new Spreadsheet();
 
-        // Hoja 1: Resumen de la quincena (empresas en filas, días en columnas)
-        $hojaResumen = $spreadsheet->getActiveSheet();
+        // Hoja 1: Data (primera hoja con todos los registros)
+        $this->agregarHojaData($spreadsheet, $consumos);
+        $spreadsheet->removeSheetByIndex(1); // elimina la hoja por defecto que quedó vacía
+
+        // Hoja 2: Resumen de la quincena (empresas en filas, días en columnas)
+        $hojaResumen = $spreadsheet->createSheet();
         $hojaResumen->setTitle('Resumen de la quincena');
 
         $fechasPeriodo = iterator_to_array($periodo);
@@ -474,7 +478,6 @@ class GestionHumanaController extends Controller
             $hoja->getColumnDimension('E')->setWidth(16);
         }
 
-        $this->agregarHojaData($spreadsheet, $consumos);
         return $this->descargarExcel($spreadsheet, 'reporte-nomina-' . $fechaDesde->format('Y-m-d') . '-' . $fechaHasta->format('Y-m-d'));
     }
 

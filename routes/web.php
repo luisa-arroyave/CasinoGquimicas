@@ -51,6 +51,8 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('/cambiar-clave', [\App\Http\Controllers\Auth\CambiarClaveController::class, 'showForm'])->name('cambiar-clave.show');
+    Route::post('/cambiar-clave', [\App\Http\Controllers\Auth\CambiarClaveController::class, 'cambiar'])->name('cambiar-clave.store');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     // API interna: validar QR y contador
@@ -133,7 +135,10 @@ Route::middleware('auth')->group(function () {
         Route::resource('tipos-usuario', TipoUsuarioController::class)->parameters(['tipo_usuario' => 'tipoUsuario']);
         Route::resource('visitantes', VisitanteController::class)->parameters(['visitante' => 'visitante']);
         Route::resource('roles', RoleController::class)->parameters(['role' => 'role']);
+        Route::get('usuarios/plantilla-importar', [AdminUsuarioController::class, 'descargarPlantillaImportacion'])->name('usuarios.plantilla-importar');
+        Route::post('usuarios/importar', [AdminUsuarioController::class, 'importar'])->name('usuarios.importar');
         Route::resource('usuarios', AdminUsuarioController::class)->parameters(['usuario' => 'usuario']);
+        Route::post('usuarios/{usuario}/resetear-clave', [AdminUsuarioController::class, 'resetearClave'])->name('usuarios.resetear-clave');
         Route::resource('precios', PrecioController::class)->parameters(['precio' => 'precio']);
         Route::get('consumos-manuales', [ConsumoManualController::class, 'index'])->name('consumos-manuales.index');
         Route::get('consumos-manuales/crear', [ConsumoManualController::class, 'create'])->name('consumos-manuales.create');

@@ -38,6 +38,10 @@ class AuthController extends Controller
         if (Auth::attempt($credentials, $remember)) {
             $request->session()->regenerate();
 
+            $user = Auth::user();
+            if ($user->cambiar_clave_obligatorio ?? false) {
+                return redirect()->route('cambiar-clave.show');
+            }
             return redirect()->intended(route('dashboard'));
         }
 

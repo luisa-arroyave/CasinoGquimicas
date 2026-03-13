@@ -23,8 +23,8 @@ class Usuario extends Authenticatable
     protected $fillable = [
         'documento',
         'nombres',
-        'email',
         'password_hash',
+        'cambiar_clave_obligatorio',
         'id_empresa',
         'id_casino_asignado',
         'id_sede_principal',
@@ -39,6 +39,7 @@ class Usuario extends Authenticatable
 
     protected $casts = [
         'activo' => 'boolean',
+        'cambiar_clave_obligatorio' => 'boolean',
         'fecha_creacion' => 'datetime',
     ];
 

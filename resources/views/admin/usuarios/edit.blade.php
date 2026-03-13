@@ -21,26 +21,6 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label for="email" class="block text-sm font-medium text-slate-700 mb-1">Email (opcional)</label>
-                <input type="email" name="email" id="email" value="{{ old('email', $usuario->email) }}" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
-                @error('email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-            </div>
-            <div class="space-y-3">
-                <div>
-                    <label for="password" class="block text-sm font-medium text-slate-700 mb-1">Nueva contraseña (opcional)</label>
-                    <p class="text-xs text-slate-500 mb-1">Deje en blanco para mantener la contraseña actual.</p>
-                    <input type="password" name="password" id="password" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500" autocomplete="new-password">
-                </div>
-                <div>
-                    <label for="password_confirmation" class="block text-sm font-medium text-slate-700 mb-1">Confirmar contraseña</label>
-                    <input type="password" name="password_confirmation" id="password_confirmation" placeholder="Solo si cambia la contraseña" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500" autocomplete="new-password">
-                </div>
-                @error('password')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-            </div>
-        </div>
-
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
                 <label for="id_empresa" class="block text-sm font-medium text-slate-700 mb-1">Empresa</label>
@@ -161,6 +141,15 @@
             <button type="submit" class="inline-flex items-center justify-center min-h-[44px] px-4 py-2.5 bg-slate-800 text-white rounded hover:bg-slate-700 transition w-full sm:w-auto font-medium">Actualizar</button>
         </div>
     </form>
+
+    <div class="mt-6 rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
+        <label class="block text-sm font-medium text-slate-700 mb-2">Restablecer contraseña</label>
+        <p class="text-sm text-slate-600 mb-3">Restablece la contraseña al número de documento ({{ $usuario->documento }}). El usuario deberá cambiarla en el próximo inicio de sesión.</p>
+        <form action="{{ route('admin.usuarios.resetear-clave', $usuario) }}" method="POST" class="inline" onsubmit="return confirm('¿Restablecer contraseña al documento ({{ $usuario->documento }})? El usuario deberá cambiarla en el próximo inicio de sesión.');">
+            @csrf
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-amber-300 bg-amber-50 text-amber-800 rounded hover:bg-amber-100 transition font-medium text-sm">Restablecer contraseña</button>
+        </form>
+    </div>
 </div>
 @push('scripts')
 <script>

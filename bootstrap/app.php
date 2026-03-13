@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\EnsureUserHasRole::class,
             'permission' => \App\Http\Middleware\EnsureUserHasPermission::class,
         ]);
+        $middleware->appendToGroup('auth', [
+            \App\Http\Middleware\EnsurePasswordChanged::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
