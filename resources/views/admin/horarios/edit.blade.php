@@ -22,6 +22,7 @@
             <label for="hora_fin" class="block text-sm font-medium text-slate-700">Hora fin</label>
             <input type="time" name="hora_fin" id="hora_fin" value="{{ old('hora_fin', \Carbon\Carbon::parse($horario->hora_fin)->format('H:i')) }}" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
             @error('hora_fin')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            <p class="mt-1 text-xs text-slate-500">Si la hora de fin es menor que la de inicio, el turno cruza medianoche (ej. 22:00–06:00).</p>
         </div>
         <div class="flex items-center">
             <input type="checkbox" name="activo" id="activo" value="1" {{ old('activo', $horario->activo) ? 'checked' : '' }} class="rounded border-slate-300">

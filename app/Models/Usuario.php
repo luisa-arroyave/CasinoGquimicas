@@ -31,6 +31,7 @@ class Usuario extends Authenticatable
         'id_rol',
         'id_tipo_usuario',
         'id_empresa_temporal',
+        'id_empresa_contratista',
         'codigo_qr',
         'activo',
     ];
@@ -124,6 +125,14 @@ class Usuario extends Authenticatable
     }
 
     /**
+     * Empresa contratista (cuando tipo de usuario es Contratista).
+     */
+    public function empresaContratista(): BelongsTo
+    {
+        return $this->belongsTo(EmpresaContratista::class, 'id_empresa_contratista', 'id_empresa_contratista');
+    }
+
+    /**
      * Consumos registrados por este usuario.
      */
     public function consumos(): HasMany
@@ -172,6 +181,37 @@ class Usuario extends Authenticatable
     {
         $nombreRol = $this->rol?->nombre;
         return $nombreRol !== null && in_array($nombreRol, $roles, true);
+    }
+
+    /**
+     * Empleado de una empresa cuyo nombre coincide (sin distinguir mayúsculas).
+     */
+    public function esEmpleadoDeEmpresaPorNombre(string $nombreEmpresa): bool
+    {
+        $this->loadMissing('rol', 'empresa');
+        $rol = strtolower(trim((string) ($this->rol->nombre ?? '')));
+        $emp = trim((string) ($this->empresa->nombre ?? ''));
+
+        return $rol === 'empleado' && strcasecmp($emp, trim($nombreEmpresa)) === 0;
+    }
+
+    /**
+     * Empleado de la empresa IBC: prioriza id_empresa (config consumo.empresa_ibc_id / EMPRESA_IBC_ID en .env).
+     */
+    public function esEmpleadoIbc(): bool
+    {
+        $this->loadMissing('rol', 'empresa');
+        $rol = strtolower(trim((string) ($this->rol->nombre ?? '')));
+        if ($rol !== 'empleado') {
+            return false;
+        }
+
+        $ibcId = config('consumo.empresa_ibc_id');
+        if ($ibcId !== null && $ibcId !== '') {
+            return (int) $this->id_empresa === (int) $ibcId;
+        }
+
+        return strcasecmp(trim((string) ($this->empresa->nombre ?? '')), 'IBC') === 0;
     }
 
     /**

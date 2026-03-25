@@ -24,7 +24,12 @@
             <tr class="hover:bg-slate-50">
                 <td class="px-4 py-3 text-slate-800">{{ $h->nombre }}</td>
                 <td class="px-4 py-3">{{ \Carbon\Carbon::parse($h->hora_inicio)->format('H:i') }}</td>
-                <td class="px-4 py-3">{{ \Carbon\Carbon::parse($h->hora_fin)->format('H:i') }}</td>
+                <td class="px-4 py-3">
+                    {{ \Carbon\Carbon::parse($h->hora_fin)->format('H:i') }}
+                    @if((string) $h->hora_inicio > (string) $h->hora_fin)
+                        <span class="block text-xs text-slate-500">(hasta el día siguiente)</span>
+                    @endif
+                </td>
                 <td class="px-4 py-3">{{ $h->activo ? 'Sí' : 'No' }}</td>
                 <td class="px-4 py-3 text-right space-x-2">
                     <a href="{{ route('admin.horarios.edit', $h) }}" class="text-slate-600 hover:text-slate-900">Editar</a>

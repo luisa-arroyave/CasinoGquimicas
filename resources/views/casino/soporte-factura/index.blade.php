@@ -5,17 +5,6 @@
 
 @section('content')
 <div class="space-y-6 max-w-2xl">
-    @if (session('success'))
-        <div class="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-green-800">
-            {{ session('success') }}
-        </div>
-    @endif
-    @if (session('error'))
-        <div class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-red-800">
-            {{ session('error') }}
-        </div>
-    @endif
-
     {{-- Formulario: generar nuevo soporte para factura --}}
     <div class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h2 class="text-lg font-semibold text-slate-800 mb-4">Generar soporte para factura</h2>

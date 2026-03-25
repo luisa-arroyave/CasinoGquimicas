@@ -42,6 +42,21 @@
         <p class="text-xs text-slate-500 mt-2">Tome una foto del QR o seleccione una imagen.</p>
     </div>
 
+    <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <h2 class="text-base sm:text-lg font-semibold text-slate-800 mb-3">Registrar por cédula</h2>
+        <p class="text-sm text-slate-600 mb-3">Ingrese el número de cédula del empleado para registrar la entrega.</p>
+        <div class="flex gap-2">
+            <input type="text" id="input-cedula" placeholder="Número de cédula"
+                   class="flex-1 rounded-lg border border-slate-300 px-4 py-3 sm:py-2.5 text-slate-900 focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 min-h-[48px]"
+                   autocomplete="off">
+            <button type="button" id="btn-registrar-cedula"
+                    class="shrink-0 flex items-center justify-center gap-2 min-h-[48px] px-6 py-3 rounded-lg bg-slate-600 text-white font-medium hover:bg-slate-700 active:bg-slate-600 focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                Registrar
+            </button>
+        </div>
+    </div>
+
     <div id="lector-qr-file" aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:260px;height:260px"></div>
     <div id="resultado" class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm hidden">
         <p id="resultado-mensaje" class="font-medium"></p>
@@ -64,6 +79,7 @@
         return fromConfig || fromPage || '';
     })();
     var urlValidarQr = window.location.origin + (basePath ? basePath.replace(/\/$/, '') : '') + '/api/consumo/validar-qr';
+    var urlRegistrarCedula = window.location.origin + (basePath ? basePath.replace(/\/$/, '') : '') + '/api/consumo/registrar-por-cedula';
     const inputQr = document.getElementById('input-qr');
     const idCasinoSelect = document.getElementById('id_casino');
     const contadorEl = document.getElementById('contador-entregados');
@@ -219,12 +235,17 @@
     // Soporte para lector de código QR conectado como teclado:
     // escribe en input oculto y envía Enter al final.
     if (inputQr) {
-        // Mantener el foco en el input para que reciba lo que escriba el lector
+        const inputCedulaEl = document.getElementById('input-cedula');
         const focusInput = () => inputQr.focus();
         focusInput();
         inputQr.addEventListener('blur', () => {
-            // Pequeño delay para no pelear con otros focos legítimos
-            setTimeout(focusInput, 50);
+            setTimeout(function() {
+                var active = document.activeElement;
+                if (active && (active === inputCedulaEl || active === idCasinoSelect || (active.id && active.id.indexOf('cedula') >= 0))) {
+                    return;
+                }
+                focusInput();
+            }, 50);
         });
 
         inputQr.addEventListener('keydown', function(e) {
@@ -312,6 +333,65 @@
             }).catch(function(err) {
                 showResult(false, 'No se detectó código QR en la imagen.', 'Tome una foto más nítida. Evite formatos HEIC (iPhone: use formato más compatible en Ajustes).');
             });
+        });
+    }
+
+    var inputCedula = document.getElementById('input-cedula');
+    var btnRegistrarCedula = document.getElementById('btn-registrar-cedula');
+    if (inputCedula && btnRegistrarCedula) {
+        function registrarPorCedula() {
+            var idCasino = idCasinoSelect ? idCasinoSelect.value : '';
+            var documento = (inputCedula.value || '').trim().replace(/\s/g, '');
+            if (!idCasino) {
+                showResult(false, 'Selecciona un punto de entrega (casino).', '');
+                return;
+            }
+            if (!documento) {
+                showResult(false, 'Ingresa el número de cédula.', '');
+                inputCedula.focus();
+                return;
+            }
+            resultadoEl.classList.remove('hidden');
+            resultadoEl.classList.remove('bg-red-50', 'border-red-200', 'bg-green-50', 'border-green-200');
+            resultadoEl.classList.add('bg-sky-50', 'border-sky-200');
+            resultadoMensaje.textContent = 'Registrando...';
+            resultadoDetalle.textContent = '';
+            if (btnCancelar) btnCancelar.classList.add('hidden');
+            btnRegistrarCedula.disabled = true;
+
+            fetch(urlRegistrarCedula, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken || '',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ documento: documento, id_casino: parseInt(idCasino, 10) })
+            })
+            .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+            .then(function(res) {
+                if (res.status >= 200 && res.status < 300 && res.data && res.data.ok) {
+                    showResult(true, 'Consumo registrado correctamente.', res.data.consumo ? (res.data.consumo.nombres + ' · ' + res.data.consumo.horario) : '', res.data.entregados_hoy);
+                    inputCedula.value = '';
+                    inputCedula.focus();
+                } else {
+                    showResult(false, (res.data && res.data.mensaje) || 'Error al registrar.', '');
+                }
+            })
+            .catch(function() {
+                showResult(false, 'Error de conexión. Revisa la red e intenta de nuevo.', '');
+            })
+            .finally(function() {
+                btnRegistrarCedula.disabled = false;
+            });
+        }
+        btnRegistrarCedula.addEventListener('click', registrarPorCedula);
+        inputCedula.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                registrarPorCedula();
+            }
         });
     }
 })();

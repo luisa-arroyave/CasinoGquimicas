@@ -21,6 +21,7 @@
             <label for="hora_fin" class="block text-sm font-medium text-slate-700">Hora fin</label>
             <input type="time" name="hora_fin" id="hora_fin" value="{{ old('hora_fin') }}" required class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
             @error('hora_fin')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            <p class="mt-1 text-xs text-slate-500">Si la hora de fin es <strong>menor</strong> que la de inicio (ej. inicio 22:00, fin 06:00), el sistema interpreta un turno que cruza medianoche.</p>
         </div>
         <div class="flex items-center">
             <input type="checkbox" name="activo" id="activo" value="1" {{ old('activo', true) ? 'checked' : '' }} class="rounded border-slate-300">

@@ -11,7 +11,9 @@
         th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
         th { background: #f5f5f5; font-weight: 600; }
         .text-right { text-align: right; }
-        .totales { margin-top: 20px; padding: 12px; background: #f9f9f9; border: 1px solid #ddd; }
+        .totales { margin-top: 12px; margin-bottom: 16px; padding: 12px; background: #f9f9f9; border: 1px solid #ddd; }
+        .seccion-tabla { margin-top: 20px; }
+        .seccion-tabla h2 { font-size: 14px; margin-bottom: 8px; color: #444; }
         .totales .fila { display: flex; justify-content: space-between; padding: 4px 0; }
         .totales .gran-total { font-size: 14px; font-weight: bold; margin-top: 8px; padding-top: 8px; border-top: 2px solid #333; }
         .footer { margin-top: 24px; font-size: 9px; color: #888; }
@@ -25,34 +27,65 @@
         Generado: {{ now()->format('d/m/Y H:i') }}
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Fecha</th>
-                <th>Hora</th>
-                <th>Horario</th>
-                <th>Persona</th>
-                <th>Empresa</th>
-                <th class="text-right">P. casino</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach($consumos as $c)
-            <tr>
-                <td>{{ $c->fecha_consumo?->format('d/m/Y') }}</td>
-                <td>{{ $c->hora_consumo ? (is_object($c->hora_consumo) ? $c->hora_consumo->format('H:i') : substr($c->hora_consumo, 0, 5)) : '—' }}</td>
-                <td>{{ $c->display_horario }}</td>
-                <td>{{ $c->display_consumidor }}</td>
-                <td>{{ $c->display_empresa }}</td>
-                <td class="text-right">{{ $c->display_precio_casino }}</td>
-            </tr>
-            @endforeach
-        </tbody>
-    </table>
-
     <div class="totales">
         <div class="fila"><span>Total almuerzos / vales:</span><strong>{{ $total_almuerzos }}</strong></div>
         <div class="fila gran-total"><span>Valor total:</span><span>$ {{ number_format($valor_total, 0, ',', '.') }}</span></div>
+    </div>
+
+    {{-- Tabla 1: Total de vales por empresa --}}
+    <div class="seccion-tabla">
+        <h2>Total de vales por empresa</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Empresa</th>
+                    <th class="text-right">Cantidad vales</th>
+                    <th class="text-right">Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                @php
+                    $porEmpresa = $consumos->groupBy(fn($c) => $c->id_empresa ?? 'sin-empresa');
+                    $empresasOrdenadas = $porEmpresa->sortBy(fn($items) => $items->first()->display_empresa ?? '');
+                @endphp
+                @foreach($empresasOrdenadas as $items)
+                <tr>
+                    <td>{{ $items->first()->display_empresa }}</td>
+                    <td class="text-right">{{ $items->count() }}</td>
+                    <td class="text-right">$ {{ number_format($items->sum('precio_casino'), 0, ',', '.') }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+
+    {{-- Tabla 2: Detalle de registros día a día --}}
+    <div class="seccion-tabla">
+        <h2>Detalle de consumos por fecha</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Hora</th>
+                    <th>Horario</th>
+                    <th>Persona</th>
+                    <th>Empresa</th>
+                    <th class="text-right">P. casino</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($consumos as $c)
+                <tr>
+                    <td>{{ $c->fecha_consumo?->format('d/m/Y') }}</td>
+                    <td>{{ $c->hora_consumo ? (is_object($c->hora_consumo) ? $c->hora_consumo->format('H:i') : substr($c->hora_consumo, 0, 5)) : '—' }}</td>
+                    <td>{{ $c->display_horario }}</td>
+                    <td>{{ $c->display_consumidor }}</td>
+                    <td>{{ $c->display_empresa }}</td>
+                    <td class="text-right">{{ $c->display_precio_casino }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
     </div>
 
     <div class="footer">

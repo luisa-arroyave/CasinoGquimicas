@@ -7,7 +7,8 @@
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
     <h2 class="text-xl font-semibold text-slate-800">Empleados / usuarios empresariales</h2>
     <div class="flex flex-wrap gap-2">
-        <a href="{{ route('admin.usuarios.plantilla-importar') }}" class="inline-flex items-center px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50">Descargar plantilla</a>
+        <a href="{{ route('admin.usuarios.plantilla-importar') }}" class="inline-flex items-center px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50">Descargar plantilla (listado usuarios)</a>
+        <a href="{{ route('admin.usuarios.plantilla-ejemplo-importar') }}" class="inline-flex items-center px-4 py-2 border border-slate-200 text-slate-600 text-sm rounded-lg hover:bg-slate-50">Ejemplo importar usuarios</a>
         <button type="button" onclick="document.getElementById('form-importar').classList.toggle('hidden')" class="inline-flex items-center px-4 py-2 border border-emerald-600 text-emerald-700 rounded-lg hover:bg-emerald-50">Importar Excel</button>
         <a href="{{ route('admin.usuarios.create') }}" class="inline-flex items-center px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-700">Nuevo usuario</a>
     </div>
@@ -22,7 +23,7 @@
         </div>
         <button type="submit" class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Importar</button>
     </form>
-    <p class="text-xs text-slate-500 mt-2">Descargue la plantilla, complétela con los datos y súbala aquí. Si Zip no está habilitado en PHP, guarde el Excel como CSV y súbalo. La contraseña inicial será el documento de cada usuario.</p>
+    <p class="text-xs text-slate-500 mt-2">Para <strong>importar usuarios nuevos</strong> use el archivo <strong>Ejemplo importar usuarios</strong> (columnas empresa, rol, tipo por nombre). La contraseña inicial será el documento de cada usuario. Si Zip no está habilitado en PHP, guarde el Excel como CSV y súbalo.</p>
 </div>
 <form method="GET" class="mb-4 flex flex-wrap gap-3">
     <input type="text" name="buscar" value="{{ request('buscar') }}" placeholder="Documento o nombre" class="rounded-lg border-slate-300 shadow-sm">

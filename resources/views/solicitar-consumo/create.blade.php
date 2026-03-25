@@ -46,9 +46,22 @@
                 {{-- Valores automáticos (solo informativos o ocultos). Precios y estado se asignan en el backend. --}}
                 <div class="rounded-lg bg-slate-50 p-3 sm:p-4 space-y-3">
                     <div>
-                        <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Tipo de comida</span>
-                        <p class="mt-0.5 text-base font-medium text-slate-800">{{ $horarioVigente->nombre }}</p>
-                        <p class="text-xs text-slate-500">Según la hora actual</p>
+                        @if(!empty($mostrarSelectorTipoComidaIbc) && $horariosTipoComidaIbc->isNotEmpty())
+                            <label for="id_horario" class="block text-xs font-medium text-slate-500 uppercase tracking-wide">Tipo de comida</label>
+                            <select name="id_horario" id="id_horario" required
+                                    class="mt-1 block w-full rounded-lg border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-2 focus:ring-slate-500/20 min-h-[48px] px-4 py-2.5 text-slate-900">
+                                <option value="">Seleccione refrigerio o cena…</option>
+                                @foreach($horariosTipoComidaIbc as $hTipo)
+                                    <option value="{{ $hTipo->id_horario }}" {{ (string) old('id_horario') === (string) $hTipo->id_horario ? 'selected' : '' }}>{{ $hTipo->nombre }}</option>
+                                @endforeach
+                            </select>
+                            @error('id_horario')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                            <p class="text-xs text-slate-500 mt-1">En este horario debe indicar si corresponde refrigerio o cena.</p>
+                        @else
+                            <span class="text-xs font-medium text-slate-500 uppercase tracking-wide">Tipo de comida</span>
+                            <p class="mt-0.5 text-base font-medium text-slate-800">{{ $horarioVigente->nombre }}</p>
+                            <p class="text-xs text-slate-500">Según la hora actual</p>
+                        @endif
                     </div>
                     <div>
                         <label for="id_casino" class="block text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Seleccione casino</label>

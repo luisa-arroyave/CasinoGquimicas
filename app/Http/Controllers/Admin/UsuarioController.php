@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Casino;
 use App\Models\Empresa;
+use App\Models\EmpresaContratista;
 use App\Models\EmpresaTemporal;
+use App\Models\HorarioConsumo;
 use App\Models\Role;
 use App\Models\Sede;
 use App\Models\TipoUsuario;
@@ -13,6 +15,7 @@ use App\Models\Usuario;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -45,20 +48,22 @@ class UsuarioController extends Controller
         $roles = Role::orderBy('nombre')->get();
         $tipos = TipoUsuario::orderBy('nombre')->get();
         $empresasTemporales = EmpresaTemporal::where('activa', true)->orderBy('nombre')->get();
+        $empresasContratistas = EmpresaContratista::where('activa', true)->orderBy('nombre')->get();
         $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
         $sedes = Sede::orderBy('nombre')->get();
-        return view('admin.usuarios.create', compact('empresas', 'roles', 'tipos', 'empresasTemporales', 'casinos', 'sedes'));
+        return view('admin.usuarios.create', compact('empresas', 'roles', 'tipos', 'empresasTemporales', 'empresasContratistas', 'casinos', 'sedes'));
     }
 
     public function store(Request $request): RedirectResponse
     {
         $valid = $request->validate([
-            'documento' => 'required|string|max:50',
+            'documento' => ['required', 'string', 'max:50', Rule::unique('usuarios', 'documento')],
             'nombres' => 'required|string|max:255',
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_rol' => 'required|exists:roles,id_rol',
             'id_tipo_usuario' => 'required|exists:tipos_usuario,id_tipo_usuario',
             'id_empresa_temporal' => 'nullable|exists:empresas_temporales,id_empresa_temporal',
+            'id_empresa_contratista' => 'nullable|exists:empresas_contratistas,id_empresa_contratista',
             'codigo_qr' => 'nullable|string|max:100',
             'activo' => 'boolean',
             'empresas' => 'nullable|array',
@@ -67,6 +72,8 @@ class UsuarioController extends Controller
             'id_sede_principal' => 'nullable|exists:sedes,id_sede',
             'sedes' => 'nullable|array',
             'sedes.*' => 'exists:sedes,id_sede',
+        ], [
+            'documento.unique' => 'Este documento ya está registrado: el usuario ya existe. No puede crear otro con el mismo número (incluye usuarios eliminados del listado).',
         ]);
         $valid['activo'] = $request->boolean('activo');
         $rol = Role::find($valid['id_rol']);
@@ -80,15 +87,32 @@ class UsuarioController extends Controller
         $valid['password_hash'] = Hash::make($valid['documento']);
         $valid['cambiar_clave_obligatorio'] = true;
         $tipoUsuario = TipoUsuario::find($valid['id_tipo_usuario']);
-        if ($tipoUsuario && strtoupper(trim($tipoUsuario->nombre)) === 'TEMPORAL') {
+        $tipoNombre = $tipoUsuario ? strtoupper(trim($tipoUsuario->nombre)) : '';
+        if ($tipoNombre === 'TEMPORAL') {
             if (! $request->filled('id_empresa_temporal')) {
                 return back()->withInput()->withErrors(['id_empresa_temporal' => 'Debe seleccionar una empresa temporal para usuarios con tipo Temporal.']);
             }
+            $valid['id_empresa_contratista'] = null;
+        } elseif ($tipoNombre === 'CONTRATISTA') {
+            if (! $request->filled('id_empresa_contratista')) {
+                return back()->withInput()->withErrors(['id_empresa_contratista' => 'Debe seleccionar una empresa contratista para usuarios con tipo Contratista.']);
+            }
+            $valid['id_empresa_temporal'] = null;
         } else {
             $valid['id_empresa_temporal'] = null;
+            $valid['id_empresa_contratista'] = null;
         }
         unset($valid['empresas'], $valid['sedes']);
-        $usuario = Usuario::create($valid);
+        try {
+            $usuario = Usuario::create($valid);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                return back()->withInput()->withErrors([
+                    'documento' => 'Este documento ya está registrado: el usuario ya existe.',
+                ]);
+            }
+            throw $e;
+        }
         $this->syncEmpresasAcceso($usuario, $request->input('empresas', []));
         $this->syncSedesAcceso($usuario, $request->input('sedes', []));
         return redirect()->route('admin.usuarios.index')->with('success', 'Usuario creado correctamente.');
@@ -101,21 +125,23 @@ class UsuarioController extends Controller
         $roles = Role::orderBy('nombre')->get();
         $tipos = TipoUsuario::orderBy('nombre')->get();
         $empresasTemporales = EmpresaTemporal::where('activa', true)->orderBy('nombre')->get();
+        $empresasContratistas = EmpresaContratista::where('activa', true)->orderBy('nombre')->get();
         $usuario->load('sedesAcceso');
         $casinos = Casino::where('activo', true)->orderBy('nombre')->get();
         $sedes = Sede::orderBy('nombre')->get();
-        return view('admin.usuarios.edit', compact('usuario', 'empresas', 'roles', 'tipos', 'empresasTemporales', 'casinos', 'sedes'));
+        return view('admin.usuarios.edit', compact('usuario', 'empresas', 'roles', 'tipos', 'empresasTemporales', 'empresasContratistas', 'casinos', 'sedes'));
     }
 
     public function update(Request $request, Usuario $usuario): RedirectResponse
     {
         $valid = $request->validate([
-            'documento' => 'required|string|max:50',
+            'documento' => ['required', 'string', 'max:50', Rule::unique('usuarios', 'documento')->ignore($usuario->id_usuario, 'id_usuario')],
             'nombres' => 'required|string|max:255',
             'id_empresa' => 'required|exists:empresas,id_empresa',
             'id_rol' => 'required|exists:roles,id_rol',
             'id_tipo_usuario' => 'required|exists:tipos_usuario,id_tipo_usuario',
             'id_empresa_temporal' => 'nullable|exists:empresas_temporales,id_empresa_temporal',
+            'id_empresa_contratista' => 'nullable|exists:empresas_contratistas,id_empresa_contratista',
             'codigo_qr' => 'nullable|string|max:100',
             'activo' => 'boolean',
             'empresas' => 'nullable|array',
@@ -124,6 +150,8 @@ class UsuarioController extends Controller
             'id_sede_principal' => 'nullable|exists:sedes,id_sede',
             'sedes' => 'nullable|array',
             'sedes.*' => 'exists:sedes,id_sede',
+        ], [
+            'documento.unique' => 'Este documento ya pertenece a otro usuario. Elija un documento distinto.',
         ]);
         $valid['activo'] = $request->boolean('activo');
         $rol = Role::find($valid['id_rol']);
@@ -135,15 +163,32 @@ class UsuarioController extends Controller
             $valid['id_casino_asignado'] = null;
         }
         $tipoUsuario = TipoUsuario::find($valid['id_tipo_usuario']);
-        if ($tipoUsuario && strtoupper(trim($tipoUsuario->nombre)) === 'TEMPORAL') {
+        $tipoNombre = $tipoUsuario ? strtoupper(trim($tipoUsuario->nombre)) : '';
+        if ($tipoNombre === 'TEMPORAL') {
             if (! $request->filled('id_empresa_temporal')) {
                 return back()->withInput()->withErrors(['id_empresa_temporal' => 'Debe seleccionar una empresa temporal para usuarios con tipo Temporal.']);
             }
+            $valid['id_empresa_contratista'] = null;
+        } elseif ($tipoNombre === 'CONTRATISTA') {
+            if (! $request->filled('id_empresa_contratista')) {
+                return back()->withInput()->withErrors(['id_empresa_contratista' => 'Debe seleccionar una empresa contratista para usuarios con tipo Contratista.']);
+            }
+            $valid['id_empresa_temporal'] = null;
         } else {
             $valid['id_empresa_temporal'] = null;
+            $valid['id_empresa_contratista'] = null;
         }
         unset($valid['empresas'], $valid['sedes']);
-        $usuario->update($valid);
+        try {
+            $usuario->update($valid);
+        } catch (\Illuminate\Database\QueryException $e) {
+            if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                return back()->withInput()->withErrors([
+                    'documento' => 'Este documento ya pertenece a otro usuario.',
+                ]);
+            }
+            throw $e;
+        }
         $this->syncEmpresasAcceso($usuario, $request->input('empresas', []));
         $this->syncSedesAcceso($usuario, $request->input('sedes', []));
         return redirect()->route('admin.usuarios.index')->with('success', 'Usuario actualizado correctamente.');
@@ -172,8 +217,9 @@ class UsuarioController extends Controller
 
     public function destroy(Usuario $usuario): RedirectResponse
     {
-        $usuario->delete();
-        return redirect()->route('admin.usuarios.index')->with('success', 'Usuario eliminado correctamente.');
+        $usuario->forceDelete();
+
+        return redirect()->route('admin.usuarios.index')->with('success', 'Usuario eliminado correctamente de la base de datos.');
     }
 
     /**
@@ -189,19 +235,88 @@ class UsuarioController extends Controller
     }
 
     /**
-     * Descargar plantilla Excel para importar usuarios.
+     * Listado Excel de todos los usuarios: mismas columnas que importar consumos; tipo_comida, fecha y hora vacíos.
      */
     public function descargarPlantillaImportacion(): \Symfony\Component\HttpFoundation\BinaryFileResponse
     {
-        $spreadsheet = new Spreadsheet();
+        $usuarios = Usuario::query()
+            ->orderBy('nombres')
+            ->get(['documento', 'nombres', 'id_empresa', 'id_casino_asignado']);
+
+        $spreadsheet = new Spreadsheet;
         $hoja = $spreadsheet->getActiveSheet();
         $hoja->setTitle('Usuarios');
 
-        $headers = ['documento', 'nombres', 'empresa', 'rol', 'tipo_usuario', 'empresa_temporal', 'casino_asignado', 'sede_principal', 'activo'];
+        $headers = ['documento', 'nombres_consumidor', 'id_empresa', 'id_casino', 'tipo_comida', 'fecha_consumo', 'hora_consumo'];
+        $hoja->fromArray($headers, null, 'A1');
+        $hoja->getStyle('A1:G1')->getFont()->setBold(true);
+
+        $fila = 2;
+        foreach ($usuarios as $u) {
+            $hoja->fromArray([
+                [
+                    $u->documento,
+                    $u->nombres,
+                    $u->id_empresa,
+                    $u->id_casino_asignado ?? '',
+                    '',
+                    '',
+                    '',
+                ],
+            ], null, 'A' . $fila);
+            $fila++;
+        }
+
+        foreach (range('A', 'G') as $col) {
+            $hoja->getColumnDimension($col)->setAutoSize(true);
+        }
+
+        $empresas = Empresa::where('activa', true)->orderBy('nombre')->get(['id_empresa', 'nombre']);
+        $casinos = Casino::where('activo', true)->orderBy('nombre')->get(['id_casino', 'nombre']);
+        $horarios = HorarioConsumo::where('activo', true)->orderBy('hora_inicio')->get(['id_horario', 'nombre']);
+
+        $refEmp = $spreadsheet->createSheet();
+        $refEmp->setTitle('Referencia empresas');
+        $refEmp->fromArray([['id_empresa', 'nombre']], null, 'A1');
+        $refEmp->fromArray($empresas->map(fn ($e) => [$e->id_empresa, $e->nombre])->toArray(), null, 'A2');
+        $refEmp->getStyle('A1:B1')->getFont()->setBold(true);
+
+        $refCas = $spreadsheet->createSheet();
+        $refCas->setTitle('Referencia casinos');
+        $refCas->fromArray([['id_casino', 'nombre']], null, 'A1');
+        $refCas->fromArray($casinos->map(fn ($c) => [$c->id_casino, $c->nombre])->toArray(), null, 'A2');
+        $refCas->getStyle('A1:B1')->getFont()->setBold(true);
+
+        $refHor = $spreadsheet->createSheet();
+        $refHor->setTitle('Referencia horarios');
+        $refHor->fromArray([['id_horario', 'nombre (tipo de comida)']], null, 'A1');
+        $refHor->fromArray($horarios->map(fn ($h) => [$h->id_horario, $h->nombre])->toArray(), null, 'A2');
+        $refHor->getStyle('A1:B1')->getFont()->setBold(true);
+
+        $tempPath = storage_path('app/temp/plantilla-usuarios-listado-' . uniqid() . '.xlsx');
+        if (! is_dir(dirname($tempPath))) {
+            mkdir(dirname($tempPath), 0755, true);
+        }
+        (new Xlsx($spreadsheet))->save($tempPath);
+
+        return response()->download($tempPath, 'plantilla-usuarios-listado.xlsx')->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Plantilla de ejemplo para importar usuarios (empresa, rol, tipo_usuario por nombre).
+     */
+    public function descargarPlantillaEjemploImportarUsuarios(): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $spreadsheet = new Spreadsheet;
+        $hoja = $spreadsheet->getActiveSheet();
+        $hoja->setTitle('Usuarios');
+
+        $headers = ['documento', 'nombres', 'empresa', 'rol', 'tipo_usuario', 'empresa_temporal', 'empresa_contratista', 'casino_asignado', 'sede_principal', 'activo'];
         $hoja->fromArray($headers, null, 'A1');
         $hoja->fromArray([
-            ['12345678', 'Juan Pérez', 'Mi Empresa', 'empleado', 'FIJO', '', '', 'Sede Central', 'Si'],
-            ['87654321', 'María López', 'Otra Empresa', 'empleado', 'TEMPORAL', 'Empresa Temp 1', '', 'Sede Norte', 'Si'],
+            ['12345678', 'Juan Pérez', 'Mi Empresa', 'empleado', 'FIJO', '', '', '', 'Sede Central', 'Si'],
+            ['87654321', 'María López', 'Otra Empresa', 'empleado', 'TEMPORAL', 'Empresa Temp 1', '', '', 'Sede Norte', 'Si'],
+            ['11111111', 'Carlos Ruiz', 'Mi Empresa', 'empleado', 'CONTRATISTA', '', 'Nombre empresa contratista', '', 'Sede Central', 'Si'],
         ], null, 'A2');
 
         $hojaRef = $spreadsheet->createSheet();
@@ -216,19 +331,22 @@ class UsuarioController extends Controller
         $hojaRef->setCellValue('B4', 'FIJO, TEMPORAL, SENA, PASANTE, CONTRATISTA');
         $hojaRef->setCellValue('A5', 'empresa_temporal');
         $hojaRef->setCellValue('B5', 'Solo si tipo_usuario=TEMPORAL. Nombre de empresa temporal.');
-        $hojaRef->setCellValue('A6', 'casino_asignado');
-        $hojaRef->setCellValue('B6', 'Solo si rol=casino. Nombre del casino.');
-        $hojaRef->setCellValue('A7', 'sede_principal');
-        $hojaRef->setCellValue('B7', 'Nombre de la sede (para empleados).');
-        $hojaRef->setCellValue('A8', 'activo');
-        $hojaRef->setCellValue('B8', 'Si o No (default: Si)');
+        $hojaRef->setCellValue('A6', 'empresa_contratista');
+        $hojaRef->setCellValue('B6', 'Solo si tipo_usuario=CONTRATISTA. Nombre de empresa contratista.');
+        $hojaRef->setCellValue('A7', 'casino_asignado');
+        $hojaRef->setCellValue('B7', 'Solo si rol=casino. Nombre del casino.');
+        $hojaRef->setCellValue('A8', 'sede_principal');
+        $hojaRef->setCellValue('B8', 'Nombre de la sede (para empleados).');
+        $hojaRef->setCellValue('A9', 'activo');
+        $hojaRef->setCellValue('B9', 'Si o No (default: Si)');
 
         $tempPath = storage_path('app/temp/plantilla-importar-usuarios-' . uniqid() . '.xlsx');
         if (! is_dir(dirname($tempPath))) {
             mkdir(dirname($tempPath), 0755, true);
         }
         (new Xlsx($spreadsheet))->save($tempPath);
-        return response()->download($tempPath, 'plantilla-importar-usuarios.xlsx')->deleteFileAfterSend(true);
+
+        return response()->download($tempPath, 'plantilla-ejemplo-importar-usuarios.xlsx')->deleteFileAfterSend(true);
     }
 
     /**
@@ -289,7 +407,10 @@ class UsuarioController extends Controller
             $filaNum = $i + 1;
             $row = array_combine(array_pad($encabezados, count($fila), ''), array_pad($fila, count($encabezados), ''));
 
-            $documento = trim((string) ($row['documento'] ?? ''));
+            $documentoRaw = $row['documento'] ?? '';
+            $documento = is_numeric($documentoRaw) && $documentoRaw !== ''
+                ? (string) (int) (float) $documentoRaw
+                : trim((string) $documentoRaw);
             $nombres = trim((string) ($row['nombres'] ?? ''));
 
             if ($documento === '' && $nombres === '') {
@@ -318,8 +439,10 @@ class UsuarioController extends Controller
                 continue;
             }
 
-            if (Usuario::where('documento', $documento)->exists()) {
-                $errores[] = "Fila {$filaNum}: ya existe un usuario con documento {$documento}.";
+            $existente = Usuario::withTrashed()->where('documento', $documento)->first();
+            if ($existente) {
+                $estado = $existente->trashed() ? ' (usuario eliminado; restaure o cambie el documento en BD)' : '';
+                $errores[] = "Fila {$filaNum}: ya existe un usuario con documento {$documento}.{$estado}";
                 continue;
             }
 
@@ -334,13 +457,22 @@ class UsuarioController extends Controller
             }
 
             $idEmpresaTemporal = null;
-            if (strtoupper(trim($tipoUsuario->nombre)) === 'TEMPORAL') {
+            $idEmpresaContratista = null;
+            $tipoNombre = strtoupper(trim($tipoUsuario->nombre));
+            if ($tipoNombre === 'TEMPORAL') {
                 $empTemp = EmpresaTemporal::where('nombre', trim((string) ($row['empresa_temporal'] ?? '')))->where('activa', true)->first();
                 if (! $empTemp) {
                     $errores[] = "Fila {$filaNum}: tipo TEMPORAL requiere empresa_temporal válida.";
                     continue;
                 }
                 $idEmpresaTemporal = $empTemp->id_empresa_temporal;
+            } elseif ($tipoNombre === 'CONTRATISTA') {
+                $empCont = EmpresaContratista::where('nombre', trim((string) ($row['empresa_contratista'] ?? '')))->where('activa', true)->first();
+                if (! $empCont) {
+                    $errores[] = "Fila {$filaNum}: tipo CONTRATISTA requiere empresa_contratista válida.";
+                    continue;
+                }
+                $idEmpresaContratista = $empCont->id_empresa_contratista;
             }
 
             $idSede = null;
@@ -363,6 +495,7 @@ class UsuarioController extends Controller
                 'id_rol' => $rol->id_rol,
                 'id_tipo_usuario' => $tipoUsuario->id_tipo_usuario,
                 'id_empresa_temporal' => $idEmpresaTemporal,
+                'id_empresa_contratista' => $idEmpresaContratista,
                 'id_casino_asignado' => $idCasino,
                 'id_sede_principal' => $idSede,
                 'activo' => $activo,

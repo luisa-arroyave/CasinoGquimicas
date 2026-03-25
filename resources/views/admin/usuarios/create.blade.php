@@ -5,12 +5,18 @@
 
 @section('content')
 <div class="max-w-4xl">
+    @if ($errors->has('documento'))
+        <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-900 shadow-sm" role="alert">
+            <p class="font-semibold text-sm">Usuario ya existe</p>
+            <p class="mt-1 text-sm">{{ $errors->first('documento') }}</p>
+        </div>
+    @endif
     <form action="{{ route('admin.usuarios.store') }}" method="POST" class="space-y-4 sm:space-y-5 bg-white p-4 sm:p-6 rounded-xl border border-slate-200 shadow-sm">
         @csrf
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
                 <label for="documento" class="block text-sm font-medium text-slate-700 mb-1">Documento</label>
-                <input type="text" name="documento" id="documento" value="{{ old('documento') }}" required class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                <input type="text" name="documento" id="documento" value="{{ old('documento') }}" required class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500 @error('documento') border-red-400 ring-1 ring-red-200 @enderror">
                 @error('documento')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
             <div>
@@ -67,6 +73,21 @@
                     @endforeach
                 </select>
                 @error('id_empresa_temporal')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+        </div>
+
+        {{-- Empresa contratista (solo cuando tipo es Contratista) --}}
+        <div id="bloque-empresa-contratista" class="hidden rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+            <p class="text-sm font-medium text-slate-700 mb-2">Empresa contratista</p>
+            <p class="text-xs text-slate-500 mb-2">Seleccione la empresa contratista del colaborador.</p>
+            <div class="max-w-sm">
+                <select name="id_empresa_contratista" id="id_empresa_contratista" class="mt-0 block w-full border border-slate-300 shadow-sm focus:border-slate-500 focus:ring-slate-500">
+                    <option value="">— Seleccione empresa contratista —</option>
+                    @foreach($empresasContratistas as $ec)
+                        <option value="{{ $ec->id_empresa_contratista }}" {{ old('id_empresa_contratista') == $ec->id_empresa_contratista ? 'selected' : '' }}>{{ $ec->nombre }}</option>
+                    @endforeach
+                </select>
+                @error('id_empresa_contratista')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
         </div>
 
@@ -156,16 +177,29 @@ document.addEventListener('DOMContentLoaded', function() {
     var bloqueSede = document.getElementById('bloque-sede');
     var bloqueEmpresaTemp = document.getElementById('bloque-empresa-temporal');
     var selectEmpresaTemp = document.getElementById('id_empresa_temporal');
+    var bloqueEmpresaContr = document.getElementById('bloque-empresa-contratista');
+    var selectEmpresaContr = document.getElementById('id_empresa_contratista');
     function toggleTipo() {
         var optTipo = selTipo ? selTipo.options[selTipo.selectedIndex] : null;
         var tipoNombre = optTipo ? (optTipo.getAttribute('data-tipo-nombre') || optTipo.textContent || '').trim().toLowerCase() : '';
-        if (bloqueEmpresaTemp) {
+        if (bloqueEmpresaTemp && selectEmpresaTemp) {
             if (tipoNombre === 'temporal') {
                 bloqueEmpresaTemp.classList.remove('hidden');
-                if (selectEmpresaTemp) selectEmpresaTemp.setAttribute('required', 'required');
+                selectEmpresaTemp.setAttribute('required', 'required');
             } else {
                 bloqueEmpresaTemp.classList.add('hidden');
-                if (selectEmpresaTemp) { selectEmpresaTemp.value = ''; selectEmpresaTemp.removeAttribute('required'); }
+                selectEmpresaTemp.value = '';
+                selectEmpresaTemp.removeAttribute('required');
+            }
+        }
+        if (bloqueEmpresaContr && selectEmpresaContr) {
+            if (tipoNombre === 'contratista') {
+                bloqueEmpresaContr.classList.remove('hidden');
+                selectEmpresaContr.setAttribute('required', 'required');
+            } else {
+                bloqueEmpresaContr.classList.add('hidden');
+                selectEmpresaContr.value = '';
+                selectEmpresaContr.removeAttribute('required');
             }
         }
     }

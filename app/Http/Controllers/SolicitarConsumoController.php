@@ -9,6 +9,7 @@ use App\Models\RegistroConsumo;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class SolicitarConsumoController extends Controller
@@ -24,7 +25,13 @@ class SolicitarConsumoController extends Controller
             abort(403, 'Su cuenta no está activa. Contacte al administrador.');
         }
 
-        $horarioVigente = HorarioConsumo::horarioVigente();
+        $horarioVigente = HorarioConsumo::horarioParaSolicitudEmpleado();
+        $horariosTipoComidaIbc = HorarioConsumo::horariosRefrigerioCenaCubrenAhora()
+            ->sortBy(fn (HorarioConsumo $h) => mb_strtoupper(trim((string) $h->nombre), 'UTF-8') === 'REFRIGERIO' ? 0 : 1)
+            ->values();
+        $mostrarSelectorTipoComidaIbc = $usuarioEmpresarial->esEmpleadoIbc()
+            && HorarioConsumo::enVentanaRefrigerioCena()
+            && $horariosTipoComidaIbc->isNotEmpty();
 
         $sedesPermitidasIds = $usuarioEmpresarial->sedes_permitidas_ids;
         $sedeElegida = null;
@@ -47,14 +54,15 @@ class SolicitarConsumoController extends Controller
         }
         $horariosDisponibles = HorarioConsumo::where('activo', true)->orderBy('hora_inicio')->get();
 
-        // Consumo ya solicitado para el horario vigente (código activo según horario de la comida)
+        // Consumo ya solicitado para el mismo “slot” (en ventana refrigerio/cena: cualquiera de los dos bloquea)
         $consumoActivo = null;
         $codigoQrActivo = null;
-        if ($horarioVigente) {
+        $idsSlot = HorarioConsumo::idsHorariosSlotConsumoActual();
+        if ($horarioVigente && $idsSlot !== []) {
             $consumoActivo = RegistroConsumo::with(['casino', 'horarioConsumo'])
                 ->where('id_usuario', $usuarioEmpresarial->id_usuario)
                 ->whereDate('fecha_consumo', Carbon::today())
-                ->where('id_horario', $horarioVigente->id_horario)
+                ->whereIn('id_horario', $idsSlot)
                 ->where('estado', 'SOLICITADO')
                 ->first();
             if ($consumoActivo) {
@@ -76,6 +84,8 @@ class SolicitarConsumoController extends Controller
             'codigoQrActivo' => $codigoQrActivo,
             'sedesParaOtraSede' => $sedesParaOtraSede,
             'sedeElegida' => $sedeElegida,
+            'mostrarSelectorTipoComidaIbc' => $mostrarSelectorTipoComidaIbc,
+            'horariosTipoComidaIbc' => $horariosTipoComidaIbc,
         ]);
     }
 
@@ -90,10 +100,20 @@ class SolicitarConsumoController extends Controller
             abort(403, 'Su cuenta no está activa.');
         }
 
-        $valid = $request->validate([
+        $permitidosIds = HorarioConsumo::horariosRefrigerioCenaCubrenAhora()->pluck('id_horario')->all();
+        $requiereTipoIbc = $usuarioEmpresarial->esEmpleadoIbc()
+            && HorarioConsumo::enVentanaRefrigerioCena()
+            && $permitidosIds !== [];
+
+        $rules = [
             'id_casino' => ['required', 'exists:casinos,id_casino'],
             'direccion_entrega' => 'nullable|string|max:500',
-        ]);
+        ];
+        if ($requiereTipoIbc) {
+            $rules['id_horario'] = ['required', 'integer', Rule::in($permitidosIds)];
+        }
+
+        $valid = $request->validate($rules);
 
         $casino = Casino::where('activo', true)->findOrFail($valid['id_casino']);
         $sedesPermitidasIds = $usuarioEmpresarial->sedes_permitidas_ids;
@@ -112,7 +132,7 @@ class SolicitarConsumoController extends Controller
             return back()->withInput()->withErrors(['direccion_entrega' => 'La dirección de entrega es obligatoria para pedidos a domicilio.']);
         }
 
-        $horario = HorarioConsumo::horarioVigente();
+        $horario = HorarioConsumo::horarioParaRegistrarConsumoEmpleado($usuarioEmpresarial, $valid);
         if (! $horario) {
             return back()->withErrors(['horario' => 'No hay horario de consumo vigente en este momento.']);
         }
@@ -156,6 +176,7 @@ class SolicitarConsumoController extends Controller
             'empresa_temporal_nombre' => $empresaTemporalNombre,
             'casino_nombre' => $casino->nombre,
             'horario_nombre' => $horario->nombre,
+            'tipo_comida' => mb_strtoupper(trim((string) $horario->nombre), 'UTF-8'),
             'fecha_consumo' => $hoy,
             'hora_consumo' => Carbon::now()->format('H:i:s'),
             'precio_empleado' => $precioEmpleado,

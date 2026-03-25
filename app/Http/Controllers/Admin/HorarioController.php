@@ -26,7 +26,7 @@ class HorarioController extends Controller
         $valid = $request->validate([
             'nombre' => 'required|string|max:100',
             'hora_inicio' => 'required|date_format:H:i',
-            'hora_fin' => 'required|date_format:H:i|after:hora_inicio',
+            'hora_fin' => 'required|date_format:H:i',
             'activo' => 'boolean',
         ]);
         $valid['activo'] = $request->boolean('activo');

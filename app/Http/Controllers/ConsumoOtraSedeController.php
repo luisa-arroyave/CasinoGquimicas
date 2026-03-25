@@ -10,6 +10,7 @@ use App\Models\Sede;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
 class ConsumoOtraSedeController extends Controller
@@ -33,7 +34,13 @@ class ConsumoOtraSedeController extends Controller
             ->orderBy('nombre')
             ->get();
 
-        $horarioVigente = HorarioConsumo::horarioVigente();
+        $horarioVigente = HorarioConsumo::horarioParaSolicitudEmpleado();
+        $horariosTipoComidaIbc = HorarioConsumo::horariosRefrigerioCenaCubrenAhora()
+            ->sortBy(fn (HorarioConsumo $h) => mb_strtoupper(trim((string) $h->nombre), 'UTF-8') === 'REFRIGERIO' ? 0 : 1)
+            ->values();
+        $mostrarSelectorTipoComidaIbc = $usuario->esEmpleadoIbc()
+            && HorarioConsumo::enVentanaRefrigerioCena()
+            && $horariosTipoComidaIbc->isNotEmpty();
         $horariosDisponibles = HorarioConsumo::where('activo', true)->orderBy('hora_inicio')->get();
 
         $oldSede = null;
@@ -53,14 +60,14 @@ class ConsumoOtraSedeController extends Controller
             ];
         })->toArray();
 
-        // Consumo ya solicitado para horario vigente
         $consumoActivo = null;
         $codigoQrActivo = null;
-        if ($horarioVigente) {
+        $idsSlot = HorarioConsumo::idsHorariosSlotConsumoActual();
+        if ($horarioVigente && $idsSlot !== []) {
             $consumoActivo = RegistroConsumo::with(['casino', 'horarioConsumo'])
                 ->where('id_usuario', $usuario->id_usuario)
                 ->whereDate('fecha_consumo', Carbon::today())
-                ->where('id_horario', $horarioVigente->id_horario)
+                ->whereIn('id_horario', $idsSlot)
                 ->where('estado', 'SOLICITADO')
                 ->first();
             if ($consumoActivo) {
@@ -76,6 +83,8 @@ class ConsumoOtraSedeController extends Controller
             'horariosDisponibles' => $horariosDisponibles,
             'consumoActivo' => $consumoActivo,
             'codigoQrActivo' => $codigoQrActivo,
+            'mostrarSelectorTipoComidaIbc' => $mostrarSelectorTipoComidaIbc,
+            'horariosTipoComidaIbc' => $horariosTipoComidaIbc,
         ]);
     }
 
@@ -89,9 +98,19 @@ class ConsumoOtraSedeController extends Controller
             abort(403, 'Su cuenta no está activa.');
         }
 
-        $valid = $request->validate([
+        $permitidosIds = HorarioConsumo::horariosRefrigerioCenaCubrenAhora()->pluck('id_horario')->all();
+        $requiereTipoIbc = $usuario->esEmpleadoIbc()
+            && HorarioConsumo::enVentanaRefrigerioCena()
+            && $permitidosIds !== [];
+
+        $rules = [
             'id_casino' => ['required', 'exists:casinos,id_casino'],
-        ]);
+        ];
+        if ($requiereTipoIbc) {
+            $rules['id_horario'] = ['required', 'integer', Rule::in($permitidosIds)];
+        }
+
+        $valid = $request->validate($rules);
 
         $casino = Casino::where('activo', true)->findOrFail($valid['id_casino']);
         $sedesPermitidasIds = $usuario->sedes_permitidas_ids;
@@ -105,7 +124,7 @@ class ConsumoOtraSedeController extends Controller
 
         $esDomicilio = strtolower(trim($casino->tipo_casino ?? '')) === 'domicilio';
 
-        $horario = HorarioConsumo::horarioVigente();
+        $horario = HorarioConsumo::horarioParaRegistrarConsumoEmpleado($usuario, $valid);
         if (! $horario) {
             return back()->withErrors(['horario' => 'No hay horario de consumo vigente en este momento.']);
         }
@@ -147,6 +166,7 @@ class ConsumoOtraSedeController extends Controller
             'empresa_temporal_nombre' => $empresaTemporalNombre,
             'casino_nombre' => $casino->nombre,
             'horario_nombre' => $horario->nombre,
+            'tipo_comida' => mb_strtoupper(trim((string) $horario->nombre), 'UTF-8'),
             'fecha_consumo' => $hoy,
             'hora_consumo' => Carbon::now()->format('H:i:s'),
             'precio_empleado' => $precioEmpleado,

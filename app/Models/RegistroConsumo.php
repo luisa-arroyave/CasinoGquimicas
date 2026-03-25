@@ -29,6 +29,7 @@ class RegistroConsumo extends Model
         'empresa_temporal_nombre',
         'casino_nombre',
         'horario_nombre',
+        'tipo_comida',
         'fecha_consumo',
         'hora_consumo',
         'precio_casino',

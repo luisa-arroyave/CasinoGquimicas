@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AreaVisitaController;
 use App\Http\Controllers\Admin\CasinoController as AdminCasinoController;
 use App\Http\Controllers\Admin\ConsumoManualController;
 use App\Http\Controllers\Admin\EmpresaController;
+use App\Http\Controllers\Admin\EmpresaContratistaController;
 use App\Http\Controllers\Admin\EmpresaTemporalController;
 use App\Http\Controllers\Admin\HorarioController;
 use App\Http\Controllers\Admin\PrecioController;
@@ -62,6 +63,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/api/consumo/validar-qr', [ConsumoValidarQrController::class, 'validarQr'])
         ->middleware('role:casino,operativo')
         ->name('api.consumo.validar-qr');
+    Route::post('/api/consumo/registrar-por-cedula', [ConsumoValidarQrController::class, 'registrarPorCedula'])
+        ->middleware('role:casino,operativo')
+        ->name('api.consumo.registrar-por-cedula');
 
     // Módulo casino: escaneo QR y panel
     Route::get('/casino/escaneo-qr', [CasinoEscaneoController::class, 'index'])
@@ -129,6 +133,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [AdminController::class, 'index'])->name('index');
         Route::resource('empresas', EmpresaController::class)->parameters(['empresa' => 'empresa']);
         Route::resource('empresas-temporales', EmpresaTemporalController::class)->parameters(['empresa_temporal' => 'empresaTemporal']);
+        Route::resource('empresas-contratistas', EmpresaContratistaController::class)->parameters(['empresas-contratistas' => 'empresaContratista']);
         Route::resource('sedes', SedeController::class)->parameters(['sede' => 'sede']);
         Route::resource('casinos', AdminCasinoController::class)->parameters(['casino' => 'casino']);
         Route::resource('horarios', HorarioController::class)->parameters(['horario' => 'horario']);
@@ -136,6 +141,7 @@ Route::middleware('auth')->group(function () {
         Route::resource('visitantes', VisitanteController::class)->parameters(['visitante' => 'visitante']);
         Route::resource('roles', RoleController::class)->parameters(['role' => 'role']);
         Route::get('usuarios/plantilla-importar', [AdminUsuarioController::class, 'descargarPlantillaImportacion'])->name('usuarios.plantilla-importar');
+        Route::get('usuarios/plantilla-ejemplo-importar', [AdminUsuarioController::class, 'descargarPlantillaEjemploImportarUsuarios'])->name('usuarios.plantilla-ejemplo-importar');
         Route::post('usuarios/importar', [AdminUsuarioController::class, 'importar'])->name('usuarios.importar');
         Route::resource('usuarios', AdminUsuarioController::class)->parameters(['usuario' => 'usuario']);
         Route::post('usuarios/{usuario}/resetear-clave', [AdminUsuarioController::class, 'resetearClave'])->name('usuarios.resetear-clave');
@@ -143,6 +149,8 @@ Route::middleware('auth')->group(function () {
         Route::get('consumos-manuales', [ConsumoManualController::class, 'index'])->name('consumos-manuales.index');
         Route::get('consumos-manuales/crear', [ConsumoManualController::class, 'create'])->name('consumos-manuales.create');
         Route::post('consumos-manuales', [ConsumoManualController::class, 'store'])->name('consumos-manuales.store');
+        Route::get('consumos-manuales/plantilla-importar', [ConsumoManualController::class, 'descargarPlantillaImportacion'])->name('consumos-manuales.plantilla-importar');
+        Route::post('consumos-manuales/importar', [ConsumoManualController::class, 'importarExcel'])->name('consumos-manuales.importar');
         Route::resource('areas', AreaVisitaController::class)->except(['show']);
     });
 });
