@@ -332,7 +332,7 @@ class UsuarioController extends Controller
         $hojaRef->setCellValue('A5', 'empresa_temporal');
         $hojaRef->setCellValue('B5', 'Solo si tipo_usuario=TEMPORAL. Nombre de empresa temporal.');
         $hojaRef->setCellValue('A6', 'empresa_contratista');
-        $hojaRef->setCellValue('B6', 'Solo si tipo_usuario=CONTRATISTA. Nombre de empresa contratista.');
+        $hojaRef->setCellValue('B6', 'Solo si tipo_usuario=CONTRATISTA. Nombre o NIT de empresa contratista activa (columna empresa_contratista).');
         $hojaRef->setCellValue('A7', 'casino_asignado');
         $hojaRef->setCellValue('B7', 'Solo si rol=casino. Nombre del casino.');
         $hojaRef->setCellValue('A8', 'sede_principal');
@@ -378,7 +378,10 @@ class UsuarioController extends Controller
             $reader = IOFactory::createReader($readerType);
             $reader->setReadDataOnly(true);
             if ($readerType === 'Csv') {
-                $reader->setDelimiter(',');
+                $reader->setDelimiter(';');
+                if (($sample = @file_get_contents($fullPath, false, null, 0, 400)) && str_contains($sample, ',') && ! str_contains($sample, ';')) {
+                    $reader->setDelimiter(',');
+                }
                 $reader->setEnclosure('"');
             }
             $spreadsheet = $reader->load($fullPath);
@@ -398,7 +401,9 @@ class UsuarioController extends Controller
             return back()->with('error', 'El archivo no tiene datos. La primera fila debe ser encabezados y desde la fila 2 los usuarios.');
         }
 
-        $encabezados = array_map('strtolower', array_map('trim', $filas[0]));
+        $encabezados = array_map(static function ($h) {
+            return strtolower(trim(preg_replace('/[\s\-]+/u', '_', (string) $h)));
+        }, $filas[0]);
         $creados = 0;
         $errores = [];
 
@@ -421,21 +426,24 @@ class UsuarioController extends Controller
                 continue;
             }
 
-            $empresa = Empresa::where('nombre', trim((string) ($row['empresa'] ?? '')))->first();
+            $empresaNombre = trim((string) ($row['empresa'] ?? ''));
+            $empresa = $empresaNombre === '' ? null : Empresa::whereRaw('LOWER(TRIM(nombre)) = ?', [mb_strtolower($empresaNombre, 'UTF-8')])->first();
             if (! $empresa) {
-                $errores[] = "Fila {$filaNum}: empresa no encontrada («{$row['empresa']}»).";
+                $errores[] = "Fila {$filaNum}: empresa no encontrada («{$empresaNombre}»).";
                 continue;
             }
 
-            $rol = Role::where('nombre', trim((string) ($row['rol'] ?? '')))->first();
+            $rolNombre = trim((string) ($row['rol'] ?? ''));
+            $rol = $rolNombre === '' ? null : Role::whereRaw('LOWER(TRIM(nombre)) = ?', [mb_strtolower($rolNombre, 'UTF-8')])->first();
             if (! $rol) {
-                $errores[] = "Fila {$filaNum}: rol no encontrado («{$row['rol']}»).";
+                $errores[] = "Fila {$filaNum}: rol no encontrado («{$rolNombre}»).";
                 continue;
             }
 
-            $tipoUsuario = TipoUsuario::where('nombre', trim((string) ($row['tipo_usuario'] ?? '')))->first();
+            $tipoUsuarioRaw = trim((string) ($row['tipo_usuario'] ?? ''));
+            $tipoUsuario = TipoUsuario::whereRaw('UPPER(TRIM(nombre)) = ?', [strtoupper($tipoUsuarioRaw)])->first();
             if (! $tipoUsuario) {
-                $errores[] = "Fila {$filaNum}: tipo_usuario no encontrado («{$row['tipo_usuario']}»).";
+                $errores[] = "Fila {$filaNum}: tipo_usuario no encontrado («{$tipoUsuarioRaw}»).";
                 continue;
             }
 
@@ -460,16 +468,30 @@ class UsuarioController extends Controller
             $idEmpresaContratista = null;
             $tipoNombre = strtoupper(trim($tipoUsuario->nombre));
             if ($tipoNombre === 'TEMPORAL') {
-                $empTemp = EmpresaTemporal::where('nombre', trim((string) ($row['empresa_temporal'] ?? '')))->where('activa', true)->first();
+                $nombreTemp = trim((string) ($row['empresa_temporal'] ?? ''));
+                $empTemp = $nombreTemp === '' ? null : EmpresaTemporal::query()
+                    ->where('activa', true)
+                    ->whereRaw('LOWER(TRIM(nombre)) = ?', [mb_strtolower($nombreTemp, 'UTF-8')])
+                    ->first();
                 if (! $empTemp) {
-                    $errores[] = "Fila {$filaNum}: tipo TEMPORAL requiere empresa_temporal válida.";
+                    $errores[] = "Fila {$filaNum}: tipo TEMPORAL requiere columna empresa_temporal con el nombre de una empresa temporal activa (coincide sin importar mayúsculas). Valor recibido: «{$nombreTemp}».";
                     continue;
                 }
                 $idEmpresaTemporal = $empTemp->id_empresa_temporal;
             } elseif ($tipoNombre === 'CONTRATISTA') {
-                $empCont = EmpresaContratista::where('nombre', trim((string) ($row['empresa_contratista'] ?? '')))->where('activa', true)->first();
+                $rawCont = trim((string) ($row['empresa_contratista'] ?? ''));
+                $empCont = null;
+                if ($rawCont !== '') {
+                    $empCont = EmpresaContratista::query()
+                        ->where('activa', true)
+                        ->where(function ($q) use ($rawCont) {
+                            $q->whereRaw('LOWER(TRIM(nombre)) = ?', [mb_strtolower($rawCont, 'UTF-8')])
+                                ->orWhere('nit', $rawCont);
+                        })
+                        ->first();
+                }
                 if (! $empCont) {
-                    $errores[] = "Fila {$filaNum}: tipo CONTRATISTA requiere empresa_contratista válida.";
+                    $errores[] = "Fila {$filaNum}: tipo CONTRATISTA requiere columna empresa_contratista con el nombre o NIT de una empresa contratista activa. Valor recibido: «{$rawCont}».";
                     continue;
                 }
                 $idEmpresaContratista = $empCont->id_empresa_contratista;

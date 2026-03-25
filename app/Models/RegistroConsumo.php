@@ -27,6 +27,7 @@ class RegistroConsumo extends Model
         'tipo_usuario_nombre',
         'empresa_nombre',
         'empresa_temporal_nombre',
+        'empresa_contratista_nombre',
         'casino_nombre',
         'horario_nombre',
         'tipo_comida',

@@ -44,6 +44,59 @@ class Usuario extends Authenticatable
         'fecha_creacion' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::saving(function (Usuario $usuario) {
+            $usuario->sincronizarNombresEmpresaTemporalYContratistaDesdeFk();
+        });
+    }
+
+    /**
+     * Rellena los nombres en texto según id_empresa_temporal / id_empresa_contratista.
+     */
+    public function sincronizarNombresEmpresaTemporalYContratistaDesdeFk(): void
+    {
+        if ($this->id_empresa_temporal) {
+            $this->empresa_temporal_nombre = EmpresaTemporal::whereKey($this->id_empresa_temporal)->value('nombre');
+        } else {
+            $this->empresa_temporal_nombre = null;
+        }
+
+        if ($this->id_empresa_contratista) {
+            $this->empresa_contratista_nombre = EmpresaContratista::whereKey($this->id_empresa_contratista)->value('nombre');
+        } else {
+            $this->empresa_contratista_nombre = null;
+        }
+    }
+
+    /**
+     * Valor para copiar en registro_consumos (columna en usuario o relación).
+     */
+    public function nombreEmpresaTemporalParaRegistroConsumo(): ?string
+    {
+        $cached = $this->empresa_temporal_nombre;
+        if (is_string($cached) && trim($cached) !== '') {
+            return trim($cached);
+        }
+        $this->loadMissing('empresaTemporal');
+
+        return $this->empresaTemporal?->nombre;
+    }
+
+    /**
+     * Valor para copiar en registro_consumos (columna en usuario o relación).
+     */
+    public function nombreEmpresaContratistaParaRegistroConsumo(): ?string
+    {
+        $cached = $this->empresa_contratista_nombre;
+        if (is_string($cached) && trim($cached) !== '') {
+            return trim($cached);
+        }
+        $this->loadMissing('empresaContratista');
+
+        return $this->empresaContratista?->nombre;
+    }
+
     /**
      * Empresa del usuario (empleado pertenece a una empresa).
      */
