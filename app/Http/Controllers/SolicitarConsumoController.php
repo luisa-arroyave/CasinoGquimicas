@@ -58,11 +58,16 @@ class SolicitarConsumoController extends Controller
         $consumoActivo = null;
         $codigoQrActivo = null;
         $idsSlot = HorarioConsumo::idsHorariosSlotConsumoActual();
+        $periodoAhora = RegistroConsumo::periodoTurnoDiaDesdeFechaHora(
+            Carbon::today()->toDateString(),
+            Carbon::now()->format('H:i:s')
+        );
         if ($horarioVigente && $idsSlot !== []) {
             $consumoActivo = RegistroConsumo::with(['casino', 'horarioConsumo'])
                 ->where('id_usuario', $usuarioEmpresarial->id_usuario)
                 ->whereDate('fecha_consumo', Carbon::today())
                 ->whereIn('id_horario', $idsSlot)
+                ->where('periodo_turno_dia', $periodoAhora)
                 ->where('estado', 'SOLICITADO')
                 ->first();
             if ($consumoActivo) {
@@ -138,15 +143,18 @@ class SolicitarConsumoController extends Controller
         }
 
         $hoy = Carbon::today()->toDateString();
+        $horaSolicitud = Carbon::now()->format('H:i:s');
+        $periodo = RegistroConsumo::periodoTurnoDiaDesdeFechaHora($hoy, $horaSolicitud);
 
-        // Evitar duplicado: un consumo por usuario, fecha, horario (unique en BD)
+        // Evitar duplicado: un consumo por usuario, fecha, horario y periodo del día (unique en BD)
         $existente = RegistroConsumo::where('id_usuario', $usuarioEmpresarial->id_usuario)
             ->where('id_horario', $horario->id_horario)
             ->whereDate('fecha_consumo', $hoy)
+            ->where('periodo_turno_dia', $periodo)
             ->first();
 
         if ($existente) {
-            return back()->withErrors(['id_casino' => 'Ya tiene un consumo solicitado para ' . $horario->nombre . ' hoy.']);
+            return back()->withErrors(['id_casino' => 'Ya tiene un consumo solicitado para ' . $horario->nombre . ' hoy en este periodo de turno (misma franja horaria del día).']);
         }
 
         $precio = Precio::where('id_horario', $horario->id_horario)
@@ -159,9 +167,7 @@ class SolicitarConsumoController extends Controller
         $precioEmpleado = $precio ? (float) $precio->precio_empleado : 0;
         $precioCasino = $precio ? (float) $precio->precio_casino : 0;
 
-        $usuarioEmpresarial->load(['rol', 'tipoUsuario', 'empresa', 'empresaTemporal']);
-        $empresa = $usuarioEmpresarial->empresa;
-        $empresaTemporalNombre = $usuarioEmpresarial->empresaTemporal?->nombre;
+        $usuarioEmpresarial->load(['rol', 'tipoUsuario', 'empresa', 'empresaTemporal', 'empresaContratista']);
 
         $consumo = RegistroConsumo::create([
             'id_usuario' => $usuarioEmpresarial->id_usuario,
@@ -172,13 +178,14 @@ class SolicitarConsumoController extends Controller
             'documento' => $usuarioEmpresarial->documento,
             'nombres_consumidor' => $usuarioEmpresarial->nombres,
             'tipo_usuario_nombre' => $usuarioEmpresarial->tipoUsuario?->nombre ?? null,
-            'empresa_nombre' => $empresa?->nombre,
-            'empresa_temporal_nombre' => $empresaTemporalNombre,
+            'empresa_nombre' => $usuarioEmpresarial->empresa?->nombre,
+            'empresa_temporal_nombre' => $usuarioEmpresarial->nombreEmpresaTemporalParaRegistroConsumo(),
+            'empresa_contratista_nombre' => $usuarioEmpresarial->nombreEmpresaContratistaParaRegistroConsumo(),
             'casino_nombre' => $casino->nombre,
             'horario_nombre' => $horario->nombre,
             'tipo_comida' => mb_strtoupper(trim((string) $horario->nombre), 'UTF-8'),
             'fecha_consumo' => $hoy,
-            'hora_consumo' => Carbon::now()->format('H:i:s'),
+            'hora_consumo' => $horaSolicitud,
             'precio_empleado' => $precioEmpleado,
             'precio_casino' => $precioCasino,
             'estado' => 'SOLICITADO',

@@ -63,11 +63,16 @@ class ConsumoOtraSedeController extends Controller
         $consumoActivo = null;
         $codigoQrActivo = null;
         $idsSlot = HorarioConsumo::idsHorariosSlotConsumoActual();
+        $periodoAhora = RegistroConsumo::periodoTurnoDiaDesdeFechaHora(
+            Carbon::today()->toDateString(),
+            Carbon::now()->format('H:i:s')
+        );
         if ($horarioVigente && $idsSlot !== []) {
             $consumoActivo = RegistroConsumo::with(['casino', 'horarioConsumo'])
                 ->where('id_usuario', $usuario->id_usuario)
                 ->whereDate('fecha_consumo', Carbon::today())
                 ->whereIn('id_horario', $idsSlot)
+                ->where('periodo_turno_dia', $periodoAhora)
                 ->where('estado', 'SOLICITADO')
                 ->first();
             if ($consumoActivo) {
@@ -130,13 +135,16 @@ class ConsumoOtraSedeController extends Controller
         }
 
         $hoy = Carbon::today()->toDateString();
+        $horaSolicitud = Carbon::now()->format('H:i:s');
+        $periodo = RegistroConsumo::periodoTurnoDiaDesdeFechaHora($hoy, $horaSolicitud);
         $existente = RegistroConsumo::where('id_usuario', $usuario->id_usuario)
             ->where('id_horario', $horario->id_horario)
             ->whereDate('fecha_consumo', $hoy)
+            ->where('periodo_turno_dia', $periodo)
             ->first();
 
         if ($existente) {
-            return back()->withErrors(['id_casino' => 'Ya tiene un consumo solicitado para ' . $horario->nombre . ' hoy.']);
+            return back()->withErrors(['id_casino' => 'Ya tiene un consumo solicitado para ' . $horario->nombre . ' hoy en este periodo de turno.']);
         }
 
         $precio = Precio::where('id_horario', $horario->id_horario)
@@ -149,9 +157,7 @@ class ConsumoOtraSedeController extends Controller
         $precioEmpleado = $precio ? (float) $precio->precio_empleado : 0;
         $precioCasino = $precio ? (float) $precio->precio_casino : 0;
 
-        $usuario->load(['rol', 'tipoUsuario', 'empresa', 'empresaTemporal']);
-        $empresa = $usuario->empresa;
-        $empresaTemporalNombre = $usuario->empresaTemporal?->nombre;
+        $usuario->load(['rol', 'tipoUsuario', 'empresa', 'empresaTemporal', 'empresaContratista']);
 
         $consumo = RegistroConsumo::create([
             'id_usuario' => $usuario->id_usuario,
@@ -162,8 +168,9 @@ class ConsumoOtraSedeController extends Controller
             'documento' => $usuario->documento,
             'nombres_consumidor' => $usuario->nombres,
             'tipo_usuario_nombre' => $usuario->tipoUsuario?->nombre ?? null,
-            'empresa_nombre' => $empresa?->nombre,
-            'empresa_temporal_nombre' => $empresaTemporalNombre,
+            'empresa_nombre' => $usuario->empresa?->nombre,
+            'empresa_temporal_nombre' => $usuario->nombreEmpresaTemporalParaRegistroConsumo(),
+            'empresa_contratista_nombre' => $usuario->nombreEmpresaContratistaParaRegistroConsumo(),
             'casino_nombre' => $casino->nombre,
             'horario_nombre' => $horario->nombre,
             'tipo_comida' => mb_strtoupper(trim((string) $horario->nombre), 'UTF-8'),

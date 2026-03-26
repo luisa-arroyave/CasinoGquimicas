@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -33,6 +34,7 @@ class RegistroConsumo extends Model
         'tipo_comida',
         'fecha_consumo',
         'hora_consumo',
+        'periodo_turno_dia',
         'precio_casino',
         'precio_empleado',
         'registrado_por',
@@ -44,10 +46,67 @@ class RegistroConsumo extends Model
     protected $casts = [
         'fecha_consumo' => 'date',
         'hora_consumo' => 'datetime:H:i',
+        'periodo_turno_dia' => 'integer',
         'precio_casino' => 'decimal:2',
         'precio_empleado' => 'decimal:2',
         'fecha_registro' => 'datetime',
     ];
+
+    protected static function booted(): void
+    {
+        static::saving(function (RegistroConsumo $r) {
+            try {
+                $fecha = $r->fecha_consumo instanceof Carbon
+                    ? $r->fecha_consumo->format('Y-m-d')
+                    : ($r->getAttributes()['fecha_consumo'] ?? null);
+                if (! $fecha) {
+                    return;
+                }
+                $horaRaw = $r->getRawOriginal('hora_consumo') ?? $r->getAttributes()['hora_consumo'] ?? null;
+                if ($horaRaw instanceof \DateTimeInterface) {
+                    $horaRaw = Carbon::instance($horaRaw)->format('H:i:s');
+                }
+                if ($horaRaw === null || $horaRaw === '') {
+                    return;
+                }
+                $r->periodo_turno_dia = static::periodoTurnoDiaDesdeFechaHora((string) $fecha, (string) $horaRaw);
+            } catch (\Throwable) {
+                //
+            }
+        });
+    }
+
+    /**
+     * 1 = antes de la hora de corte del día; 2 = desde la hora de corte (turnos noche/misma fecha).
+     */
+    public static function periodoTurnoDiaDesdeFechaHora(string $fechaYmd, mixed $horaMx): int
+    {
+        $cut = (string) config('consumo.periodo_turno_hora_corte', '12:00');
+        if (! preg_match('/^\d{1,2}:\d{2}(:\d{2})?$/', $cut)) {
+            $cut = '12:00:00';
+        } elseif (strlen($cut) === 5) {
+            $cut .= ':00';
+        }
+
+        if ($horaMx instanceof \DateTimeInterface) {
+            $horaStr = Carbon::instance($horaMx)->format('H:i:s');
+        } else {
+            $horaStr = trim((string) $horaMx);
+            if ($horaStr === '') {
+                return 1;
+            }
+            if (preg_match('/^\d{1,2}:\d{2}(:\d{2})?$/', $horaStr)) {
+                $horaStr = strlen($horaStr) === 5 ? $horaStr . ':00' : $horaStr;
+            } else {
+                $horaStr = Carbon::parse($horaStr)->format('H:i:s');
+            }
+        }
+
+        $dt = Carbon::parse($fechaYmd . ' ' . $horaStr);
+        $corte = Carbon::parse($fechaYmd . ' ' . $cut);
+
+        return $dt->lt($corte) ? 1 : 2;
+    }
 
     /**
      * Usuario que consumió (empleado); null si es visitante.

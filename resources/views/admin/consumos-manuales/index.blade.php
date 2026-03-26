@@ -17,7 +17,7 @@
 
 <div class="mb-6 p-4 rounded-xl border border-slate-200 bg-white">
     <h3 class="text-base font-semibold text-slate-800 mb-2">Importar desde Excel</h3>
-    <p class="text-sm text-slate-600 mb-3">Suba un archivo con las columnas: documento, nombres_consumidor, id_empresa, id_casino, <strong>tipo_comida</strong> (ALMUERZO, CENA, REFRIGERIO, según hoja Referencia horarios), fecha_consumo, hora_consumo (opcional). Ese valor se guarda en base de datos. Si omite tipo_comida, se usa el primer horario activo. El resto (precios, estado ENTREGADO, domicilio o en sitio según el casino) se completa automáticamente.</p>
+    <p class="text-sm text-slate-600 mb-3">Suba un archivo con las columnas: documento, nombres_consumidor, id_empresa, id_casino, <strong>tipo_comida</strong> (ALMUERZO, CENA, REFRIGERIO, según hoja Referencia horarios), fecha_consumo, hora_consumo (opcional). Ese valor se guarda en base de datos. Si omite tipo_comida, se usa el primer horario activo. El resto (precios, estado ENTREGADO, domicilio o en sitio según el casino) se completa automáticamente. Para turno nocturno, el mismo día y tipo de comida pueden registrarse dos veces según la hora (antes y después de la hora de corte configurada en el sistema, por defecto mediodía).</p>
     <form action="{{ route('admin.consumos-manuales.importar') }}" method="POST" enctype="multipart/form-data" class="flex flex-wrap items-end gap-3">
         @csrf
         <div>

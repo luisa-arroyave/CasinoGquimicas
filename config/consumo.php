@@ -14,4 +14,11 @@ return [
     */
     'empresa_ibc_id' => env('EMPRESA_IBC_ID'),
 
+    /*
+    | Hora de corte (H:i o H:i:s) para distinguir turnos el mismo día calendario.
+    | periodo_turno_dia = 1 si hora_consumo es antes de esta hora; 2 si es igual o después.
+    | Permite dos mismos tipos de comida el mismo día (ej. refrigerio 00:55 y 23:15).
+    */
+    'periodo_turno_hora_corte' => env('CONSUMO_PERIODO_TURNO_HORA_CORTE', '12:00'),
+
 ];

@@ -113,11 +113,13 @@ class ConsumoValidarQrController extends Controller
             }
 
             $hoy = Carbon::today()->toDateString();
+            $periodoQr = RegistroConsumo::periodoTurnoDiaDesdeFechaHora($hoy, Carbon::now()->format('H:i:s'));
             $consumo = RegistroConsumo::with(['usuario', 'horarioConsumo'])
                 ->where('id_usuario', $usuario->id_usuario)
                 ->where('id_casino', $idCasino)
                 ->where('id_horario', $horario->id_horario)
                 ->whereDate('fecha_consumo', $hoy)
+                ->where('periodo_turno_dia', $periodoQr)
                 ->where('estado', 'SOLICITADO')
                 ->first();
 
@@ -198,7 +200,7 @@ class ConsumoValidarQrController extends Controller
 
         $usuario = Usuario::where('documento', $documento)
             ->where('activo', true)
-            ->with(['empresa', 'tipoUsuario', 'empresaTemporal'])
+            ->with(['empresa', 'tipoUsuario', 'empresaTemporal', 'empresaContratista'])
             ->first();
 
         if (! $usuario) {
@@ -225,22 +227,25 @@ class ConsumoValidarQrController extends Controller
         }
 
         $hoy = Carbon::today()->toDateString();
+        $horaCedula = Carbon::now()->format('H:i:s');
+        $periodoCedula = RegistroConsumo::periodoTurnoDiaDesdeFechaHora($hoy, $horaCedula);
 
         $existente = RegistroConsumo::where('id_usuario', $usuario->id_usuario)
             ->where('id_horario', $horario->id_horario)
             ->whereDate('fecha_consumo', $hoy)
+            ->where('periodo_turno_dia', $periodoCedula)
             ->first();
 
         if ($existente) {
             if ($existente->estado === 'ENTREGADO') {
                 return response()->json([
                     'ok' => false,
-                    'mensaje' => 'Ya se registró la entrega para este empleado hoy (' . $horario->nombre . ').',
+                    'mensaje' => 'Ya se registró la entrega para este empleado hoy (' . $horario->nombre . ') en este periodo de turno.',
                 ], 400);
             }
             $updCedula = [
                 'estado' => 'ENTREGADO',
-                'hora_consumo' => Carbon::now()->format('H:i:s'),
+                'hora_consumo' => $horaCedula,
             ];
             if (empty($existente->tipo_comida)) {
                 $updCedula['tipo_comida'] = mb_strtoupper(trim((string) $horario->nombre), 'UTF-8');
@@ -268,12 +273,13 @@ class ConsumoValidarQrController extends Controller
                 'nombres_consumidor' => $usuario->nombres,
                 'tipo_usuario_nombre' => $usuario->tipoUsuario?->nombre ?? null,
                 'empresa_nombre' => $usuario->empresa?->nombre,
-                'empresa_temporal_nombre' => $usuario->empresaTemporal?->nombre,
+                'empresa_temporal_nombre' => $usuario->nombreEmpresaTemporalParaRegistroConsumo(),
+                'empresa_contratista_nombre' => $usuario->nombreEmpresaContratistaParaRegistroConsumo(),
                 'casino_nombre' => $casino->nombre,
                 'horario_nombre' => $horario->nombre,
                 'tipo_comida' => mb_strtoupper(trim((string) $horario->nombre), 'UTF-8'),
                 'fecha_consumo' => $hoy,
-                'hora_consumo' => Carbon::now()->format('H:i:s'),
+                'hora_consumo' => $horaCedula,
                 'precio_casino' => $precioCasino,
                 'precio_empleado' => $precioEmpleado,
                 'estado' => 'ENTREGADO',

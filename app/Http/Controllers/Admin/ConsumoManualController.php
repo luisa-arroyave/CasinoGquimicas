@@ -86,12 +86,14 @@ class ConsumoManualController extends Controller
         $nombresConsumidor = null;
         $tipoUsuarioNombre = null;
         $empresaTemporalNombre = null;
+        $empresaContratistaNombre = null;
         if ($idUsuario) {
-            $usuario = Usuario::with(['rol', 'tipoUsuario', 'empresaTemporal'])->find($idUsuario);
+            $usuario = Usuario::with(['rol', 'tipoUsuario', 'empresaTemporal', 'empresaContratista'])->find($idUsuario);
             $documento = $usuario?->documento;
             $nombresConsumidor = $usuario?->nombres;
             $tipoUsuarioNombre = $usuario?->tipoUsuario?->nombre;
-            $empresaTemporalNombre = $usuario?->empresaTemporal?->nombre;
+            $empresaTemporalNombre = $usuario?->nombreEmpresaTemporalParaRegistroConsumo();
+            $empresaContratistaNombre = $usuario?->nombreEmpresaContratistaParaRegistroConsumo();
         } else {
             $visitante = Visitante::find($idVisitante);
             $documento = $visitante?->documento;
@@ -100,6 +102,23 @@ class ConsumoManualController extends Controller
         }
 
         $idAreaVisita = $valid['tipo_consumidor'] === 'visitante' ? ($valid['id_area_visita'] ?? null) : null;
+
+        if ($idUsuario) {
+            $fechaManual = Carbon::parse($valid['fecha_consumo'])->toDateString();
+            $horaManual = strlen($valid['hora_consumo']) === 5 ? $valid['hora_consumo'] . ':00' : $valid['hora_consumo'];
+            $periodoManual = RegistroConsumo::periodoTurnoDiaDesdeFechaHora($fechaManual, $horaManual);
+            $dupManual = RegistroConsumo::query()
+                ->where('id_usuario', $idUsuario)
+                ->whereDate('fecha_consumo', $fechaManual)
+                ->where('id_horario', $valid['id_horario'])
+                ->where('periodo_turno_dia', $periodoManual)
+                ->exists();
+            if ($dupManual) {
+                return back()->withInput()->withErrors([
+                    'hora_consumo' => 'Ya hay un consumo para este usuario en esa fecha, tipo de comida y franja del día (antes/después de la hora de corte). Ajuste la hora o elimine el registro previo.',
+                ]);
+            }
+        }
 
         RegistroConsumo::create([
             'id_usuario' => $idUsuario,
@@ -113,6 +132,7 @@ class ConsumoManualController extends Controller
             'tipo_usuario_nombre' => $tipoUsuarioNombre,
             'empresa_nombre' => $empresa?->nombre,
             'empresa_temporal_nombre' => $empresaTemporalNombre,
+            'empresa_contratista_nombre' => $empresaContratistaNombre,
             'casino_nombre' => $casino->nombre,
             'horario_nombre' => $horario?->nombre,
             'tipo_comida' => $horario ? mb_strtoupper(trim((string) $horario->nombre), 'UTF-8') : null,
@@ -337,21 +357,25 @@ class ConsumoManualController extends Controller
             $precioEmpleado = $precio ? (float) $precio->precio_empleado : 0;
             $precioCasino = $precio ? (float) $precio->precio_casino : 0;
 
-            $usuario = Usuario::where('documento', $documento)->where('activo', true)->first();
+            $usuario = Usuario::where('documento', $documento)->where('activo', true)
+                ->with(['tipoUsuario', 'empresaTemporal', 'empresaContratista'])
+                ->first();
             $idUsuario = $usuario?->id_usuario;
             $tipoUsuarioNombre = $usuario?->tipoUsuario?->nombre ?? 'Importado';
-            $empresaTemporalNombre = $usuario?->empresaTemporal?->nombre;
+            $empresaTemporalNombre = $usuario?->nombreEmpresaTemporalParaRegistroConsumo();
+            $empresaContratistaNombre = $usuario?->nombreEmpresaContratistaParaRegistroConsumo();
 
             $tipoPedidoDb = strtolower(trim($casino->tipo_casino ?? '')) === 'domicilio' ? 'domicilio' : 'en_sitio';
 
             $fechaStr = $fechaCarbon->toDateString();
             $nombreHorario = $horario->nombre;
+            $periodo = RegistroConsumo::periodoTurnoDiaDesdeFechaHora($fechaStr, $horaStr);
 
             if ($idUsuario !== null) {
-                $claveArchivo = $idUsuario . '|' . $fechaStr . '|' . $horario->id_horario;
+                $claveArchivo = $idUsuario . '|' . $fechaStr . '|' . $horario->id_horario . '|' . $periodo;
                 if (isset($clavesVistasEnArchivo[$claveArchivo])) {
                     $filaDup = $clavesVistasEnArchivo[$claveArchivo];
-                    $errores[] = "Fila {$filaNum}: en el archivo hay otra fila (fila {$filaDup}) con el mismo usuario, la misma fecha ({$fechaStr}) y el mismo tipo de comida «{$nombreHorario}». Solo puede haber un registro por persona, fecha y tipo de comida.";
+                    $errores[] = "Fila {$filaNum}: en el archivo hay otra fila (fila {$filaDup}) con el mismo usuario, la misma fecha ({$fechaStr}), el mismo tipo de comida «{$nombreHorario}» y la misma franja horaria del día (antes/después de la hora de corte de turno).";
                     continue;
                 }
 
@@ -359,9 +383,10 @@ class ConsumoManualController extends Controller
                     ->where('id_usuario', $idUsuario)
                     ->whereDate('fecha_consumo', $fechaStr)
                     ->where('id_horario', $horario->id_horario)
+                    ->where('periodo_turno_dia', $periodo)
                     ->exists();
                 if ($yaExiste) {
-                    $errores[] = "Fila {$filaNum}: ya existe un consumo para el documento {$documento} el {$fechaStr} para «{$nombreHorario}». La base de datos no permite duplicar la misma persona, fecha y tipo de comida (refrigerio, cena, etc.). Elimine el registro anterior o cambie fecha o tipo de comida.";
+                    $errores[] = "Fila {$filaNum}: ya existe un consumo para el documento {$documento} el {$fechaStr} para «{$nombreHorario}» en esa misma franja del día. Puede registrar otro del mismo tipo el mismo día si la hora cae en la otra franja (p. ej. antes y después del mediodía).";
                     continue;
                 }
                 $clavesVistasEnArchivo[$claveArchivo] = $filaNum;
@@ -380,6 +405,7 @@ class ConsumoManualController extends Controller
                     'tipo_usuario_nombre' => $tipoUsuarioNombre,
                     'empresa_nombre' => $empresa->nombre,
                     'empresa_temporal_nombre' => $empresaTemporalNombre,
+                    'empresa_contratista_nombre' => $empresaContratistaNombre,
                     'casino_nombre' => $casino->nombre,
                     'horario_nombre' => $horario->nombre,
                     'tipo_comida' => mb_strtoupper(trim((string) $horario->nombre), 'UTF-8'),
@@ -392,8 +418,8 @@ class ConsumoManualController extends Controller
                     'registrado_por' => $request->user()?->id_usuario,
                 ]);
             } catch (UniqueConstraintViolationException $e) {
-                if (str_contains($e->getMessage(), 'uk_consumo_usuario')) {
-                    $errores[] = "Fila {$filaNum}: no se pudo guardar: ya hay un consumo para este usuario el {$fechaStr} con el tipo de comida «{$nombreHorario}». Solo se permite un registro por persona, fecha y tipo de comida.";
+                if (str_contains($e->getMessage(), 'uk_consumo_usuario_periodo') || str_contains($e->getMessage(), 'uk_consumo_usuario')) {
+                    $errores[] = "Fila {$filaNum}: no se pudo guardar: ya hay un consumo para este usuario el {$fechaStr} con «{$nombreHorario}» en la misma franja horaria del día. Revise la hora o elimine el duplicado.";
                 } else {
                     $errores[] = "Fila {$filaNum}: no se pudo guardar por un dato duplicado en el sistema. Revise que no repita la misma combinación en el archivo o en registros ya cargados.";
                 }
