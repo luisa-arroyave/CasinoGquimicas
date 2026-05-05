@@ -18,6 +18,7 @@ class TipoUsuarioSeeder extends Seeder
             'SENA',
             'PASANTE',
             'CONTRATISTA',
+            'INVITADO',
         ];
 
         foreach ($tipos as $nombre) {

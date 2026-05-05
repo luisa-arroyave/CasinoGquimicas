@@ -42,19 +42,27 @@
                 </div>
             </div>
             <div>
-                <p class="block text-sm font-medium text-slate-700 mb-2">Empresas (opcional)</p>
-                <p class="text-xs text-slate-500 mb-2">Solo empresas habilitadas para usted. Deje todas sin marcar para incluir todas.</p>
+                <p class="block text-sm font-medium text-slate-700 mb-2">Sedes (opcional)</p>
+                <p class="text-xs text-slate-500 mb-2">Marque una o varias sedes para ver <strong>todos</strong> los consumos registrados en los casinos de esas sedes (cualquier empresa). Si no marca ninguna, se aplica el alcance habitual por empresa según su perfil.</p>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-32 overflow-y-auto rounded-lg border border-slate-300 bg-slate-50/50 p-3">
-                    @php $empresasIds = old('empresas', $empresas_seleccionadas ?? []); @endphp
-                    @foreach($empresas as $e)
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" name="empresas[]" value="{{ $e->id_empresa }}" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500"
-                                   {{ in_array($e->id_empresa, $empresasIds) ? 'checked' : '' }}>
-                            <span class="text-sm text-slate-700">{{ $e->nombre }}</span>
-                        </label>
+                    @php $marcadasSede = $sedes_marcadas_formulario ?? []; @endphp
+                    @foreach($sedes_opciones_filtro as $op)
+                        @if($op['tipo'] === 'grupo')
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="sedes[]" value="grupo:{{ $op['clave'] }}" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500"
+                                       {{ in_array('grupo:' . $op['clave'], $marcadasSede, true) ? 'checked' : '' }}>
+                                <span class="text-sm text-slate-700">{{ $op['etiqueta'] }}</span>
+                            </label>
+                        @else
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" name="sedes[]" value="{{ $op['id_sede'] }}" class="rounded border-slate-300 text-slate-600 focus:ring-slate-500"
+                                       {{ in_array((string) $op['id_sede'], $marcadasSede, true) ? 'checked' : '' }}>
+                                <span class="text-sm text-slate-700">{{ $op['etiqueta'] }}</span>
+                            </label>
+                        @endif
                     @endforeach
-                    @if($empresas->isEmpty())
-                        <p class="text-sm text-slate-500 col-span-full">No hay empresas habilitadas para sus reportes.</p>
+                    @if(empty($sedes_opciones_filtro))
+                        <p class="text-sm text-slate-500 col-span-full">No hay sedes disponibles para sus reportes.</p>
                     @endif
                 </div>
             </div>
@@ -80,7 +88,6 @@
                 </button>
             </form>
             <p class="text-xs text-slate-500 mt-2">Para el Informe por Colaborador debe ingresar nombre o cédula en el campo de búsqueda.</p>
-        </div>
         </div>
     </div>
 
@@ -118,6 +125,36 @@
                         <td class="px-4 sm:px-6 py-3 text-sm text-right text-slate-900">$ {{ number_format($totales['total_casino'], 0, ',', '.') }}</td>
                     </tr>
                 </tfoot>
+            </table>
+        </x-responsive-table-wrapper>
+    </div>
+
+    {{-- Resumen por casino --}}
+    <div class="rounded-xl border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
+        <h2 class="text-base sm:text-lg font-semibold text-slate-800 mb-4">Consumo por casino</h2>
+        <x-responsive-table-wrapper>
+            <table class="min-w-full divide-y divide-slate-200 table-cards-mobile">
+                <thead class="bg-slate-50">
+                    <tr>
+                        <th class="px-4 sm:px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Casino</th>
+                        <th class="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Cantidad vales</th>
+                        <th class="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Total empleado</th>
+                        <th class="px-4 sm:px-6 py-3 text-right text-xs font-semibold text-slate-600 uppercase">Total casino</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200">
+                    @foreach($porCasino as $row)
+                    <tr class="bg-white hover:bg-slate-50 transition-colors even:bg-slate-50/50">
+                        <td class="px-4 sm:px-6 py-3 text-sm font-medium text-slate-900" data-label="Casino">{{ $row['nombre'] }}</td>
+                        <td class="px-4 sm:px-6 py-3 text-sm text-right text-slate-900" data-label="Cantidad vales">{{ $row['cantidad'] }}</td>
+                        <td class="px-4 sm:px-6 py-3 text-sm text-right text-slate-900" data-label="Total empleado">$ {{ number_format($row['total_empleado'], 0, ',', '.') }}</td>
+                        <td class="px-4 sm:px-6 py-3 text-sm text-right text-slate-900" data-label="Total casino">$ {{ number_format($row['total_casino'], 0, ',', '.') }}</td>
+                    </tr>
+                    @endforeach
+                    @if($porCasino->isEmpty())
+                    <tr><td colspan="4" class="px-4 sm:px-6 py-8 text-center text-slate-500 text-sm">No hay datos en el período.</td></tr>
+                    @endif
+                </tbody>
             </table>
         </x-responsive-table-wrapper>
     </div>
@@ -200,8 +237,8 @@
         if (fechaDesde) params.set('fecha_desde', fechaDesde);
         if (fechaHasta) params.set('fecha_hasta', fechaHasta);
 
-        document.querySelectorAll('input[name="empresas[]"]:checked').forEach(function(cb) {
-            params.append('empresas[]', cb.value);
+        document.querySelectorAll('input[name="sedes[]"]:checked').forEach(function(cb) {
+            params.append('sedes[]', cb.value);
         });
 
         const busquedaPersona = document.getElementById('busqueda_persona')?.value?.trim() || '';

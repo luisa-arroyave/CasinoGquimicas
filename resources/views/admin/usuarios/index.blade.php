@@ -27,11 +27,26 @@
 </div>
 <form method="GET" class="mb-4 flex flex-wrap gap-3">
     <input type="text" name="buscar" value="{{ request('buscar') }}" placeholder="Documento o nombre" class="rounded-lg border-slate-300 shadow-sm">
-    <select name="empresa" class="rounded-lg border-slate-300">
+    <select name="empresa" class="rounded-lg border-slate-300 min-w-[14rem]">
         <option value="">Todas las empresas</option>
-        @foreach($empresas as $e)
-            <option value="{{ $e->id_empresa }}" {{ request('empresa') == $e->id_empresa ? 'selected' : '' }}>{{ $e->nombre }}</option>
-        @endforeach
+        <optgroup label="Empresas">
+            @foreach($empresas as $e)
+                @php $valE = 'e-'.$e->id_empresa; @endphp
+                <option value="{{ $valE }}" {{ request('empresa') === $valE || request('empresa') === (string) $e->id_empresa ? 'selected' : '' }}>{{ $e->nombre }}</option>
+            @endforeach
+        </optgroup>
+        <optgroup label="Empresas temporales">
+            @foreach($empresasTemporales as $et)
+                @php $valT = 't-'.$et->id_empresa_temporal; @endphp
+                <option value="{{ $valT }}" {{ request('empresa') === $valT ? 'selected' : '' }}>{{ $et->nombre }}</option>
+            @endforeach
+        </optgroup>
+        <optgroup label="Empresas contratistas">
+            @foreach($empresasContratistas as $ec)
+                @php $valC = 'c-'.$ec->id_empresa_contratista; @endphp
+                <option value="{{ $valC }}" {{ request('empresa') === $valC ? 'selected' : '' }}>{{ $ec->nombre }}</option>
+            @endforeach
+        </optgroup>
     </select>
     <button type="submit" class="px-4 py-2 bg-slate-200 rounded-lg hover:bg-slate-300">Filtrar</button>
 </form>

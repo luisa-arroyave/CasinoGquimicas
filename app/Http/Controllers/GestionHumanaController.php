@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Casino;
 use App\Models\Empresa;
 use App\Models\RegistroConsumo;
+use App\Models\Sede;
+use App\Models\Usuario;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
@@ -17,52 +20,42 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Color;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class GestionHumanaController extends Controller
 {
     /**
-     * Reportes: filtro por fechas y empresa, ver consumo por empresa.
-     * Si el usuario tiene empresas asignadas (administrador/gestión humana), solo ve esas.
+     * Reportes: filtro por fechas y sedes (casinos de esas sedes). Resúmenes por empresa y por casino.
+     * Sin sedes marcadas: aplica el alcance por empresa del usuario (igual que antes, sin filtro por sede).
      */
     public function index(Request $request): View
     {
+        /** @var Usuario $user */
         $user = $request->user();
         $empresasPermitidas = $user->empresasAcceso()->get()->pluck('id_empresa')->toArray();
 
-        // Solo empresas que el usuario tiene en "Empresas cuyos registros de consumo puede ver"
-        if (count($empresasPermitidas) > 0) {
-            $empresas = Empresa::where('activa', true)->whereIn('id_empresa', $empresasPermitidas)->orderBy('nombre')->get();
-        } elseif ($user->role === 'gestionhumana' && $user->id_empresa) {
-            $empresas = Empresa::where('activa', true)->where('id_empresa', $user->id_empresa)->orderBy('nombre')->get();
-        } else {
-            $empresas = Empresa::where('activa', true)->orderBy('nombre')->get();
-        }
+        $sedes = $this->sedesDisponiblesParaFiltro($user, $empresasPermitidas);
 
         $fechaDesde = $request->input('fecha_desde', Carbon::today()->subDays(7)->toDateString());
         $fechaHasta = $request->input('fecha_hasta', Carbon::today()->toDateString());
-        $empresasSeleccionadas = $request->input('empresas', []);
-        if (! is_array($empresasSeleccionadas)) {
-            $empresasSeleccionadas = $empresasSeleccionadas ? [$empresasSeleccionadas] : [];
+        $sedesInputRaw = $request->input('sedes', []);
+        if (! is_array($sedesInputRaw)) {
+            $sedesInputRaw = $sedesInputRaw !== null && $sedesInputRaw !== '' ? [$sedesInputRaw] : [];
         }
-        $empresasSeleccionadas = array_values(array_filter(array_map('intval', $empresasSeleccionadas)));
+        $sedesSeleccionadas = $this->expandirSedesSeleccionadas($sedesInputRaw, $sedes);
+        $sedesMarcadasFormulario = $this->valoresCheckboxSedeRequest($request->old('sedes', $sedesInputRaw));
+        $opcionesFiltroSede = $this->opcionesFiltroSedeAgrupadas($sedes);
         $busquedaPersona = trim((string) $request->input('busqueda_persona', ''));
 
         $query = RegistroConsumo::query()
             ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta])
             ->with(['usuario', 'visitante', 'empresa', 'casino', 'horarioConsumo'])
             ->orderBy('fecha_consumo')
+            ->orderBy('id_casino')
             ->orderBy('id_empresa')
             ->orderBy('hora_consumo');
 
-        if (count($empresasPermitidas) > 0) {
-            $query->whereIn('id_empresa', $empresasPermitidas);
-        } elseif ($user->role === 'gestionhumana') {
-            $query->where('id_empresa', $user->id_empresa);
-        }
-
-        if (! empty($empresasSeleccionadas)) {
-            $query->whereIn('id_empresa', $empresasSeleccionadas);
-        }
+        $this->aplicarAlcanceReporte($query, $user, $empresasPermitidas, $sedesSeleccionadas);
 
         if ($busquedaPersona !== '') {
             $term = '%' . $busquedaPersona . '%';
@@ -87,6 +80,17 @@ class GestionHumanaController extends Controller
             ];
         })->values();
 
+        $porCasino = $consumos->groupBy('id_casino')->map(function ($items) {
+            $casino = $items->first()->casino;
+            return [
+                'casino' => $casino,
+                'nombre' => $casino?->nombre ?? 'Sin casino',
+                'cantidad' => $items->count(),
+                'total_empleado' => round($items->sum('precio_empleado'), 2),
+                'total_casino' => round($items->sum('precio_casino'), 2),
+            ];
+        })->values();
+
         $totales = [
             'cantidad' => $consumos->count(),
             'total_empleado' => round($consumos->sum('precio_empleado'), 2),
@@ -94,13 +98,14 @@ class GestionHumanaController extends Controller
         ];
 
         return view('gestion-humana.index', [
-            'empresas' => $empresas,
+            'sedes_opciones_filtro' => $opcionesFiltroSede,
+            'sedes_marcadas_formulario' => $sedesMarcadasFormulario,
             'consumos' => $consumos,
             'porEmpresa' => $porEmpresa,
+            'porCasino' => $porCasino,
             'totales' => $totales,
             'fecha_desde' => $fechaDesde,
             'fecha_hasta' => $fechaHasta,
-            'empresas_seleccionadas' => $empresasSeleccionadas,
             'busqueda_persona' => $busquedaPersona,
         ]);
     }
@@ -115,33 +120,29 @@ class GestionHumanaController extends Controller
             'fecha_hasta' => ['required', 'date', 'after_or_equal:fecha_desde'],
         ]);
 
+        /** @var Usuario $user */
         $user = $request->user();
         $empresasPermitidas = $user->empresasAcceso()->get()->pluck('id_empresa')->toArray();
 
         $fechaDesde = $request->input('fecha_desde');
         $fechaHasta = $request->input('fecha_hasta');
-        $empresasSeleccionadas = $request->input('empresas', []);
-        if (! is_array($empresasSeleccionadas)) {
-            $empresasSeleccionadas = $empresasSeleccionadas ? [$empresasSeleccionadas] : [];
+        $sedesDisponibles = $this->sedesDisponiblesParaFiltro($user, $empresasPermitidas);
+        $sedesInputRaw = $request->input('sedes', []);
+        if (! is_array($sedesInputRaw)) {
+            $sedesInputRaw = $sedesInputRaw !== null && $sedesInputRaw !== '' ? [$sedesInputRaw] : [];
         }
-        $empresasSeleccionadas = array_values(array_filter(array_map('intval', $empresasSeleccionadas)));
+        $sedesSeleccionadas = $this->expandirSedesSeleccionadas($sedesInputRaw, $sedesDisponibles);
         $busquedaPersona = trim((string) $request->input('busqueda_persona', ''));
 
         $query = RegistroConsumo::query()
             ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta])
             ->with(['usuario', 'visitante', 'empresa', 'casino', 'horarioConsumo'])
+            ->orderBy('id_casino')
             ->orderBy('id_empresa')
             ->orderBy('fecha_consumo')
             ->orderBy('hora_consumo');
 
-        if (count($empresasPermitidas) > 0) {
-            $query->whereIn('id_empresa', $empresasPermitidas);
-        } elseif ($user->role === 'gestionhumana') {
-            $query->where('id_empresa', $user->id_empresa);
-        }
-        if (! empty($empresasSeleccionadas)) {
-            $query->whereIn('id_empresa', $empresasSeleccionadas);
-        }
+        $this->aplicarAlcanceReporte($query, $user, $empresasPermitidas, $sedesSeleccionadas);
         if ($busquedaPersona !== '') {
             $term = '%' . $busquedaPersona . '%';
             $query->where(function ($q) use ($term) {
@@ -182,33 +183,29 @@ class GestionHumanaController extends Controller
             'fecha_hasta' => ['required', 'date', 'after_or_equal:fecha_desde'],
         ]);
 
+        /** @var Usuario $user */
         $user = $request->user();
         $empresasPermitidas = $user->empresasAcceso()->get()->pluck('id_empresa')->toArray();
 
         $fechaDesde = $request->input('fecha_desde');
         $fechaHasta = $request->input('fecha_hasta');
-        $empresasSeleccionadas = $request->input('empresas', []);
-        if (! is_array($empresasSeleccionadas)) {
-            $empresasSeleccionadas = $empresasSeleccionadas ? [$empresasSeleccionadas] : [];
+        $sedesDisponibles = $this->sedesDisponiblesParaFiltro($user, $empresasPermitidas);
+        $sedesInputRaw = $request->input('sedes', []);
+        if (! is_array($sedesInputRaw)) {
+            $sedesInputRaw = $sedesInputRaw !== null && $sedesInputRaw !== '' ? [$sedesInputRaw] : [];
         }
-        $empresasSeleccionadas = array_values(array_filter(array_map('intval', $empresasSeleccionadas)));
+        $sedesSeleccionadas = $this->expandirSedesSeleccionadas($sedesInputRaw, $sedesDisponibles);
         $busquedaPersona = trim((string) $request->input('busqueda_persona', ''));
 
         $query = RegistroConsumo::query()
             ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta])
             ->with(['usuario', 'visitante', 'empresa', 'casino', 'horarioConsumo'])
+            ->orderBy('id_casino')
             ->orderBy('id_empresa')
             ->orderBy('fecha_consumo')
             ->orderBy('hora_consumo');
 
-        if (count($empresasPermitidas) > 0) {
-            $query->whereIn('id_empresa', $empresasPermitidas);
-        } elseif ($user->role === 'gestionhumana') {
-            $query->where('id_empresa', $user->id_empresa);
-        }
-        if (! empty($empresasSeleccionadas)) {
-            $query->whereIn('id_empresa', $empresasSeleccionadas);
-        }
+        $this->aplicarAlcanceReporte($query, $user, $empresasPermitidas, $sedesSeleccionadas);
         if ($busquedaPersona !== '') {
             $term = '%' . $busquedaPersona . '%';
             $query->where(function ($q) use ($term) {
@@ -280,21 +277,6 @@ class GestionHumanaController extends Controller
         $hojaResumen->setTitle('Resumen de la quincena');
 
         $fechasPeriodo = iterator_to_array($periodo);
-        $empresasConConsumos = $consumos->groupBy('id_empresa')->mapWithKeys(function ($items, $idEmpresa) {
-            $nombre = $items->first()->empresa_nombre ?? $items->first()->empresa?->nombre ?? 'Sin empresa';
-            return [$idEmpresa => $nombre];
-        })->sort()->all();
-
-        $matriz = [];
-        foreach ($consumos->groupBy('id_empresa') as $idEmpresa => $itemsEmpresa) {
-            $porFecha = $itemsEmpresa->groupBy(fn ($c) => $c->fecha_consumo?->format('Y-m-d') ?? '');
-            $matriz[$idEmpresa] = [];
-            foreach ($fechasPeriodo as $fecha) {
-                $fechaStr = $fecha->format('Y-m-d');
-                $matriz[$idEmpresa][$fechaStr] = ($porFecha->get($fechaStr) ?? collect())->count();
-            }
-        }
-
         $numDias = count($fechasPeriodo);
         $colUltima = Coordinate::stringFromColumnIndex(2 + $numDias);
         $hojaResumen->mergeCells('A1:' . $colUltima . '1');
@@ -305,177 +287,65 @@ class GestionHumanaController extends Controller
         $hojaResumen->getStyle('A2:' . $colUltima . '2')->getFont()->setSize(10)->getColor()->setRGB('4B5563');
 
         $fila = 4;
-        $hojaResumen->setCellValue('A' . $fila, 'Empresa');
-        $col = 1;
-        foreach ($fechasPeriodo as $fecha) {
-            $col++;
-            $letraCol = Coordinate::stringFromColumnIndex($col);
-            $hojaResumen->setCellValue($letraCol . $fila, $fecha->format('d/m'));
-        }
-        $col++;
-        $letraTotal = Coordinate::stringFromColumnIndex($col);
-        $hojaResumen->setCellValue($letraTotal . $fila, 'Total');
-        $this->aplicarEstiloEncabezadoTabla($hojaResumen, 'A' . $fila . ':' . $letraTotal . $fila);
+        $porCasinoResumen = $consumos->groupBy('id_casino')->sortBy(function (\Illuminate\Support\Collection $itemsCas) {
+            $p = $itemsCas->first();
 
-        $fila = 5;
-        foreach ($empresasConConsumos as $idEmpresa => $nombreEmpresa) {
-            $hojaResumen->setCellValue('A' . $fila, $nombreEmpresa);
-            $totalFila = 0;
-            $col = 1;
-            foreach ($fechasPeriodo as $fecha) {
-                $col++;
-                $fechaStr = $fecha->format('Y-m-d');
-                $cantidad = $matriz[$idEmpresa][$fechaStr] ?? 0;
-                $totalFila += $cantidad;
-                $letraCol = Coordinate::stringFromColumnIndex($col);
-                $hojaResumen->setCellValue($letraCol . $fila, $cantidad);
-            }
-            $col++;
-            $letraColTotal = Coordinate::stringFromColumnIndex($col);
-            $hojaResumen->setCellValue($letraColTotal . $fila, $totalFila);
-            $fila++;
+            return mb_strtolower(trim((string) ($p->casino_nombre ?? $p->casino?->nombre ?? 'Sin casino')));
+        });
+        foreach ($porCasinoResumen as $itemsCasinoRes) {
+            $primRes = $itemsCasinoRes->first();
+            $nomCasinoRes = trim((string) ($primRes->casino_nombre ?? $primRes->casino?->nombre ?? 'Sin casino'));
+            $fila = $this->agregarTablaResumenQuincenaUnCasino(
+                $hojaResumen,
+                $itemsCasinoRes,
+                $nomCasinoRes,
+                $fechasPeriodo,
+                $colUltima,
+                $fila
+            );
         }
-        $ultimaFilaResumen = $fila - 1;
-        if ($ultimaFilaResumen >= 5) {
-            $this->aplicarBordesTabla($hojaResumen, 'A4:' . $letraTotal . $ultimaFilaResumen);
-            $hojaResumen->getStyle('B5:' . $letraTotal . $ultimaFilaResumen)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-        }
-        $hojaResumen->getColumnDimension('A')->setWidth(30);
-        for ($c = 2; $c <= $col; $c++) {
+
+        $hojaResumen->getColumnDimension('A')->setWidth(42);
+        for ($c = 2; $c <= 2 + $numDias; $c++) {
             $hojaResumen->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setWidth(10);
         }
 
-        // Hojas adicionales: Detalle por Casino
-        $casinosConConsumos = $consumos->groupBy('id_casino');
-        foreach ($casinosConConsumos as $idCasino => $consumosCasino) {
-            $casino = $consumosCasino->first()->casino;
-            $nombreCasino = $casino?->nombre ?? 'Sin casino';
-            $nombreHoja = $this->sanitizarNombreHoja($nombreCasino);
-
-            $hoja = $spreadsheet->createSheet();
-            $hoja->setTitle($nombreHoja);
-
-            $hoja->mergeCells('A1:E1');
-            $hoja->setCellValue('A1', 'Detalle por Casino - ' . $nombreCasino);
-            $this->aplicarEstiloTitulo($hoja, 'A1:E1');
-            $hoja->setCellValue('A3', 'Documento');
-            $hoja->setCellValue('B3', 'Nombre');
-            $hoja->setCellValue('C3', 'Empresa');
-            $hoja->setCellValue('D3', 'Nº vales consumidos');
-            $hoja->setCellValue('E3', 'Valor total');
-            $this->aplicarEstiloEncabezadoTabla($hoja, 'A3:E3');
-
-            $porDocumentoEmpresa = $consumosCasino->groupBy(function ($c) {
-                $doc = $c->documento ?? ($c->usuario?->documento ?? $c->visitante?->documento ?? '—');
-                $emp = $c->empresa_nombre ?? $c->empresa?->nombre ?? 'Sin empresa';
-                return $doc . '|' . $emp;
-            });
-
-            $filaDet = 4;
-            foreach ($porDocumentoEmpresa as $grupo => $items) {
-                [$doc, $emp] = explode('|', $grupo, 2);
-                $nombre = $items->first()->nombres_consumidor ?? $items->first()->usuario?->nombres ?? $items->first()->visitante?->nombre ?? '—';
-                $hoja->setCellValue('A' . $filaDet, $doc);
-                $hoja->setCellValue('B' . $filaDet, $nombre);
-                $hoja->setCellValue('C' . $filaDet, $emp);
-                $hoja->setCellValue('D' . $filaDet, $items->count());
-                $hoja->setCellValue('E' . $filaDet, '$' . number_format(round($items->sum('precio_empleado'), 2), 0, ',', '.'));
-                $filaDet++;
+        /** @var Usuario $userNom */
+        $userNom = $request->user();
+        $empPermNom = $userNom->empresasAcceso()->get()->pluck('id_empresa')->toArray();
+        $sedesDispNom = $this->sedesDisponiblesParaFiltro($userNom, $empPermNom);
+        $sedesRawNom = $request->input('sedes', []);
+        if (! is_array($sedesRawNom)) {
+            $sedesRawNom = $sedesRawNom !== null && $sedesRawNom !== '' ? [$sedesRawNom] : [];
+        }
+        $sedesSelNom = $this->expandirSedesSeleccionadas($sedesRawNom, $sedesDispNom);
+        if ($this->nominaDisparadorLayoutIbcActivo($sedesSelNom)) {
+            $idEmpIbc = $this->resolverIdEmpresaPrincipalNominaIbc();
+            if ($idEmpIbc !== null) {
+                $nombreEmpIbc = (string) (Empresa::query()->whereKey($idEmpIbc)->value('nombre') ?? 'IBC');
+                $this->agregarHojasNominaLayoutIbc($spreadsheet, $consumos, $idEmpIbc, $nombreEmpIbc, $fechaDesde, $fechaHasta);
             }
-            $this->aplicarBordesTabla($hoja, 'A3:E' . ($filaDet - 1));
-            $hoja->getStyle('D4:E' . ($filaDet - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-            $hoja->getColumnDimension('A')->setWidth(16);
-            $hoja->getColumnDimension('B')->setWidth(28);
-            $hoja->getColumnDimension('C')->setWidth(30);
-            $hoja->getColumnDimension('D')->setWidth(20);
-            $hoja->getColumnDimension('E')->setWidth(16);
         }
 
-        // Hojas adicionales: Invitados por Empresa (solo consumos de visitantes)
-        $consumosInvitados = $consumos->filter(fn ($c) => $c->id_visitante !== null);
-        $invitadosPorEmpresa = $consumosInvitados->groupBy('id_empresa');
-        foreach ($invitadosPorEmpresa as $idEmpresa => $consumosEmpresa) {
-            $nombreEmpresa = $consumosEmpresa->first()->empresa_nombre ?? $consumosEmpresa->first()->empresa?->nombre ?? 'Sin empresa';
-            $nombreHoja = $this->sanitizarNombreHoja('Inv. ' . $nombreEmpresa);
-
-            $hoja = $spreadsheet->createSheet();
-            $hoja->setTitle($nombreHoja);
-
-            $hoja->mergeCells('A1:E1');
-            $hoja->setCellValue('A1', 'Invitados - ' . $nombreEmpresa);
-            $this->aplicarEstiloTitulo($hoja, 'A1:E1');
-            $hoja->setCellValue('A3', 'Documento');
-            $hoja->setCellValue('B3', 'Nombre');
-            $hoja->setCellValue('C3', 'Empresa');
-            $hoja->setCellValue('D3', 'Nº vales consumidos');
-            $hoja->setCellValue('E3', 'Valor total');
-            $this->aplicarEstiloEncabezadoTabla($hoja, 'A3:E3');
-
-            $porDocumento = $consumosEmpresa->groupBy(function ($c) {
-                $doc = $c->documento ?? $c->visitante?->documento ?? '—';
-                return $doc;
-            });
-
-            $filaInv = 4;
-            foreach ($porDocumento as $doc => $items) {
-                $nombre = $items->first()->nombres_consumidor ?? $items->first()->visitante?->nombre ?? '—';
-                $emp = $items->first()->empresa_nombre ?? $items->first()->empresa?->nombre ?? 'Sin empresa';
-                $hoja->setCellValue('A' . $filaInv, $doc);
-                $hoja->setCellValue('B' . $filaInv, $nombre);
-                $hoja->setCellValue('C' . $filaInv, $emp);
-                $hoja->setCellValue('D' . $filaInv, $items->count());
-                $hoja->setCellValue('E' . $filaInv, '$' . number_format(round($items->sum('precio_empleado'), 2), 0, ',', '.'));
-                $filaInv++;
+        $invitados = $consumos->filter(fn (RegistroConsumo $c) => $this->esInvitadoNomina($c));
+        if ($invitados->isNotEmpty()) {
+            $titulosHojaUsadosInv = [];
+            foreach ($spreadsheet->getAllSheets() as $wsInv) {
+                $titulosHojaUsadosInv[$wsInv->getTitle()] = true;
             }
-            $this->aplicarBordesTabla($hoja, 'A3:E' . ($filaInv - 1));
-            $hoja->getStyle('D4:E' . ($filaInv - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-            $hoja->getColumnDimension('A')->setWidth(16);
-            $hoja->getColumnDimension('B')->setWidth(28);
-            $hoja->getColumnDimension('C')->setWidth(30);
-            $hoja->getColumnDimension('D')->setWidth(20);
-            $hoja->getColumnDimension('E')->setWidth(16);
-        }
-
-        // Hoja: Temporales (tipo_usuario_nombre = TEMPORAL)
-        $consumosTemporales = $consumos->filter(fn ($c) => strtoupper(trim((string) ($c->tipo_usuario_nombre ?? ''))) === 'TEMPORAL');
-        if ($consumosTemporales->isNotEmpty()) {
-            $hoja = $spreadsheet->createSheet();
-            $hoja->setTitle($this->sanitizarNombreHoja('Temporales'));
-
-            $hoja->mergeCells('A1:E1');
-            $hoja->setCellValue('A1', 'Temporales');
-            $this->aplicarEstiloTitulo($hoja, 'A1:E1');
-            $hoja->setCellValue('A3', 'Documento');
-            $hoja->setCellValue('B3', 'Nombre');
-            $hoja->setCellValue('C3', 'Empresa');
-            $hoja->setCellValue('D3', 'Nº vales consumidos');
-            $hoja->setCellValue('E3', 'Valor total');
-            $this->aplicarEstiloEncabezadoTabla($hoja, 'A3:E3');
-
-            $porDocumentoEmpresa = $consumosTemporales->groupBy(function ($c) {
-                $doc = $c->documento ?? ($c->usuario?->documento ?? $c->visitante?->documento ?? '—');
-                $emp = $c->empresa_nombre ?? $c->empresa?->nombre ?? 'Sin empresa';
-                return $doc . '|' . $emp;
-            });
-
-            $filaTemp = 4;
-            foreach ($porDocumentoEmpresa as $grupo => $items) {
-                [$doc, $emp] = explode('|', $grupo, 2);
-                $nombre = $items->first()->nombres_consumidor ?? $items->first()->usuario?->nombres ?? $items->first()->visitante?->nombre ?? '—';
-                $hoja->setCellValue('A' . $filaTemp, $doc);
-                $hoja->setCellValue('B' . $filaTemp, $nombre);
-                $hoja->setCellValue('C' . $filaTemp, $emp);
-                $hoja->setCellValue('D' . $filaTemp, $items->count());
-                $hoja->setCellValue('E' . $filaTemp, '$' . number_format(round($items->sum('precio_empleado'), 2), 0, ',', '.'));
-                $filaTemp++;
+            $hojaInv = $spreadsheet->createSheet();
+            $hojaInv->setTitle($this->tituloHojaNominaUnico('INVITADOS', $titulosHojaUsadosInv));
+            $hojaInv->mergeCells('A1:D1');
+            $hojaInv->setCellValue('A1', 'INVITADOS');
+            $this->aplicarEstiloTitulo($hojaInv, 'A1:D1');
+            $filaInv = 3;
+            foreach ($invitados->groupBy('id_casino')->sortKeys() as $itemsCasinoInv) {
+                $primInv = $itemsCasinoInv->first();
+                $nomCasInv = trim((string) ($primInv->casino_nombre ?? $primInv->casino?->nombre ?? 'Sin casino'));
+                $filaInv = $this->agregarBloqueTablaNominaDocumentos($hojaInv, $filaInv, 'INVITADOS — ' . $nomCasInv, $itemsCasinoInv);
+                $filaInv += 2;
             }
-            $this->aplicarBordesTabla($hoja, 'A3:E' . ($filaTemp - 1));
-            $hoja->getStyle('D4:E' . ($filaTemp - 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
-            $hoja->getColumnDimension('A')->setWidth(16);
-            $hoja->getColumnDimension('B')->setWidth(28);
-            $hoja->getColumnDimension('C')->setWidth(30);
-            $hoja->getColumnDimension('D')->setWidth(20);
-            $hoja->getColumnDimension('E')->setWidth(16);
+            $this->ajustarAnchoColumnasNominaDetalle($hojaInv);
         }
 
         return $this->descargarExcel($spreadsheet, 'reporte-nomina-' . $fechaDesde->format('Y-m-d') . '-' . $fechaHasta->format('Y-m-d'));
@@ -643,7 +513,7 @@ class GestionHumanaController extends Controller
 
     /**
      * Inserta la hoja "Data" como primera hoja con todos los registros del rango de fechas.
-     * Columnas: Fecha, documento, nombre, empresa, casino, tipo_usuario, precioempleado.
+     * Columnas: Fecha, documento, nombre, empresa, casino, tipo_usuario, Empresa_temporal, empresa_contratista, precio empleado.
      */
     private function agregarHojaData(Spreadsheet $spreadsheet, \Illuminate\Support\Collection $consumos): void
     {
@@ -656,8 +526,10 @@ class GestionHumanaController extends Controller
         $hojaData->setCellValue('D1', 'Empresa');
         $hojaData->setCellValue('E1', 'Casino');
         $hojaData->setCellValue('F1', 'Tipo usuario');
-        $hojaData->setCellValue('G1', 'Precio empleado');
-        $this->aplicarEstiloEncabezadoTabla($hojaData, 'A1:G1');
+        $hojaData->setCellValue('G1', 'Empresa_temporal');
+        $hojaData->setCellValue('H1', 'empresa_contratista');
+        $hojaData->setCellValue('I1', 'Precio empleado');
+        $this->aplicarEstiloEncabezadoTabla($hojaData, 'A1:I1');
 
         $fila = 2;
         foreach ($consumos as $c) {
@@ -670,14 +542,16 @@ class GestionHumanaController extends Controller
             $hojaData->setCellValue('E' . $fila, $c->casino_nombre ?? $c->casino?->nombre ?? '—');
             $tipoUsuario = $c->usuario?->tipoUsuario?->nombre ?? $c->tipo_usuario_nombre ?? '—';
             $hojaData->setCellValue('F' . $fila, $tipoUsuario);
-            $hojaData->setCellValue('G' . $fila, $precio);
+            $hojaData->setCellValue('G' . $fila, $c->empresa_temporal_nombre ?? '—');
+            $hojaData->setCellValue('H' . $fila, $c->empresa_contratista_nombre ?? '—');
+            $hojaData->setCellValue('I' . $fila, $precio);
             $fila++;
         }
 
         $ultimaFila = $fila - 1;
         if ($ultimaFila >= 2) {
-            $this->aplicarBordesTabla($hojaData, 'A1:G' . $ultimaFila);
-            $hojaData->getStyle('G2:G' . $ultimaFila)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $this->aplicarBordesTabla($hojaData, 'A1:I' . $ultimaFila);
+            $hojaData->getStyle('I2:I' . $ultimaFila)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
         }
         $hojaData->getColumnDimension('A')->setWidth(12);
         $hojaData->getColumnDimension('B')->setWidth(16);
@@ -685,13 +559,236 @@ class GestionHumanaController extends Controller
         $hojaData->getColumnDimension('D')->setWidth(28);
         $hojaData->getColumnDimension('E')->setWidth(22);
         $hojaData->getColumnDimension('F')->setWidth(16);
-        $hojaData->getColumnDimension('G')->setWidth(14);
+        $hojaData->getColumnDimension('G')->setWidth(22);
+        $hojaData->getColumnDimension('H')->setWidth(22);
+        $hojaData->getColumnDimension('I')->setWidth(14);
     }
 
-    private function sanitizarNombreHoja(string $nombre): string
+    /**
+     * Clave interna para agrupar el resumen: empleados por id_empresa, temporales por nombre de empresa temporal, contratistas por nombre de contratista.
+     */
+    private function claveAgrupacionResumenQuincena(RegistroConsumo $c): string
     {
-        $nombre = preg_replace('/[\*\?\:\[\]\/\\\\]/', '', $nombre);
-        return mb_substr($nombre, 0, 31);
+        $tipoNom = strtoupper(trim((string) ($c->tipo_usuario_nombre ?? $c->usuario?->tipoUsuario?->nombre ?? '')));
+        if ($tipoNom === 'TEMPORAL') {
+            $nom = trim((string) ($c->empresa_temporal_nombre ?? ''));
+
+            return 'T|' . ($nom !== '' ? $nom : '— Sin empresa temporal');
+        }
+        if ($tipoNom === 'CONTRATISTA') {
+            $nom = trim((string) ($c->empresa_contratista_nombre ?? ''));
+
+            return 'C|' . ($nom !== '' ? $nom : '— Sin empresa contratista');
+        }
+
+        $idEf = $this->idEmpresaEfectivaResumenQuincena($c);
+        if ($idEf === 0) {
+            $nom = mb_strtolower(trim((string) ($c->empresa_nombre ?? $c->empresa?->nombre ?? '')));
+
+            return 'E|0|' . ($nom !== '' ? $nom : 'sin');
+        }
+
+        return 'E|' . $idEf;
+    }
+
+    /**
+     * Tipo de colaborador para nómina: si hay usuario vinculado, usar su tipoUsuario (fuente de verdad);
+     * si no, el nombre snapshot en el registro (visitantes / legado).
+     */
+    private function tipoUsuarioNominaEfectivo(RegistroConsumo $c): string
+    {
+        if ($c->id_usuario && $c->usuario?->tipoUsuario) {
+            $nom = $c->usuario->tipoUsuario->nombre;
+
+            return strtoupper(trim((string) $nom));
+        }
+
+        return strtoupper(trim((string) ($c->tipo_usuario_nombre ?? '')));
+    }
+
+    /**
+     * Consumos de invitados / visitantes para la hoja INVITADOS del layout de nómina.
+     */
+    private function esInvitadoNomina(RegistroConsumo $c): bool
+    {
+        if ($this->tipoUsuarioNominaEfectivo($c) === 'INVITADO') {
+            return true;
+        }
+        if ($c->id_visitante && ! $c->id_usuario) {
+            return true;
+        }
+        $snap = strtoupper(trim((string) ($c->tipo_usuario_nombre ?? '')));
+
+        return in_array($snap, ['VISITANTE', 'INVITADO'], true);
+    }
+
+    /**
+     * Empresa empleadora para el resumen: la del usuario (colaborador), no solo la del registro.
+     * Así los consumos de quien trabaja en otra empresa (p. ej. QBC) no se mezclan con la empresa del casino o del id_empresa mal cargado en el registro.
+     */
+    private function idEmpresaEfectivaResumenQuincena(RegistroConsumo $c): int
+    {
+        if ($c->id_usuario && $c->usuario !== null) {
+            $uid = $c->usuario->getAttribute('id_empresa');
+            if ($uid !== null && (int) $uid !== 0) {
+                return (int) $uid;
+            }
+        }
+
+        return (int) ($c->id_empresa ?? 0);
+    }
+
+    private function nombreEmpresaEfectivaResumenQuincena(RegistroConsumo $c): string
+    {
+        if ($c->id_usuario && $c->usuario !== null) {
+            $nom = $c->usuario->empresa?->nombre;
+            if (is_string($nom) && trim($nom) !== '') {
+                return trim($nom);
+            }
+        }
+
+        $idEf = $this->idEmpresaEfectivaResumenQuincena($c);
+        if ($idEf !== 0 && $c->relationLoaded('empresa') && $c->empresa !== null && (int) $c->empresa->getKey() === $idEf) {
+            $nom = $c->empresa->nombre;
+            if (is_string($nom) && trim($nom) !== '') {
+                return trim($nom);
+            }
+        }
+
+        $snap = trim((string) ($c->empresa_nombre ?? ''));
+        if ($snap !== '') {
+            return $snap;
+        }
+
+        $nom = $c->empresa?->nombre;
+        if (is_string($nom) && trim($nom) !== '') {
+            return trim($nom);
+        }
+
+        return 'Sin empresa';
+    }
+
+    /**
+     * Texto de la primera columna en "Resumen de la quincena".
+     */
+    private function etiquetaFilaResumenQuincena(RegistroConsumo $c): string
+    {
+        $tipoNom = strtoupper(trim((string) ($c->tipo_usuario_nombre ?? $c->usuario?->tipoUsuario?->nombre ?? '')));
+        if ($tipoNom === 'TEMPORAL') {
+            $nom = trim((string) ($c->empresa_temporal_nombre ?? ''));
+
+            return 'Temporal — ' . ($nom !== '' ? $nom : 'Sin empresa temporal');
+        }
+        if ($tipoNom === 'CONTRATISTA') {
+            $nom = trim((string) ($c->empresa_contratista_nombre ?? ''));
+
+            return 'Contratista — ' . ($nom !== '' ? $nom : 'Sin empresa contratista');
+        }
+
+        return $this->nombreEmpresaEfectivaResumenQuincena($c);
+    }
+
+    /**
+     * Orden de bloques en el resumen: empresas, luego temporales, luego contratistas.
+     */
+    private function ordenCategoriaResumenQuincena(RegistroConsumo $c): int
+    {
+        $tipoNom = strtoupper(trim((string) ($c->tipo_usuario_nombre ?? $c->usuario?->tipoUsuario?->nombre ?? '')));
+        if ($tipoNom === 'TEMPORAL') {
+            return 1;
+        }
+        if ($tipoNom === 'CONTRATISTA') {
+            return 2;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Una tabla de resumen (empresa × días) solo con consumos de un restaurante; deja filas en blanco debajo para separar del siguiente bloque.
+     *
+     * @param  array<int, \Carbon\Carbon>  $fechasPeriodo
+     * @return int siguiente fila para otro bloque
+     */
+    private function agregarTablaResumenQuincenaUnCasino(
+        Worksheet $hoja,
+        \Illuminate\Support\Collection $consumosCasino,
+        string $nombreRestaurante,
+        array $fechasPeriodo,
+        string $colUltima,
+        int $filaInicio
+    ): int {
+        $hoja->mergeCells('A' . $filaInicio . ':' . $colUltima . $filaInicio);
+        $hoja->setCellValue('A' . $filaInicio, 'Restaurante: ' . $nombreRestaurante);
+        $hoja->getStyle('A' . $filaInicio)->getFont()->setBold(true)->setSize(12);
+        $hoja->getStyle('A' . $filaInicio)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER);
+
+        $porClaveResumen = $consumosCasino->groupBy(fn (RegistroConsumo $c) => $this->claveAgrupacionResumenQuincena($c));
+
+        $filasOrdenadas = $porClaveResumen->map(function (\Illuminate\Support\Collection $items, string $clave) {
+            $primero = $items->first();
+
+            return [
+                'clave' => $clave,
+                'etiqueta' => $this->etiquetaFilaResumenQuincena($primero),
+                'orden' => $this->ordenCategoriaResumenQuincena($primero),
+            ];
+        })->values()->sortBy(fn (array $row) => sprintf('%d-%s', $row['orden'], mb_strtolower($row['etiqueta'])))->values()->all();
+
+        $matriz = [];
+        foreach ($porClaveResumen as $clave => $itemsGrupo) {
+            $porFecha = $itemsGrupo->groupBy(fn ($c) => $c->fecha_consumo?->format('Y-m-d') ?? '');
+            $matriz[$clave] = [];
+            foreach ($fechasPeriodo as $fecha) {
+                $fechaStr = $fecha->format('Y-m-d');
+                $matriz[$clave][$fechaStr] = ($porFecha->get($fechaStr) ?? collect())->count();
+            }
+        }
+
+        $fila = $filaInicio + 2;
+        $hoja->setCellValue('A' . $fila, 'Empresa');
+        $col = 1;
+        foreach ($fechasPeriodo as $fecha) {
+            $col++;
+            $letraCol = Coordinate::stringFromColumnIndex($col);
+            $hoja->setCellValue($letraCol . $fila, $fecha->format('d/m'));
+        }
+        $col++;
+        $letraTotalCalculada = Coordinate::stringFromColumnIndex($col);
+        $hoja->setCellValue($letraTotalCalculada . $fila, 'Total');
+        $this->aplicarEstiloEncabezadoTabla($hoja, 'A' . $fila . ':' . $letraTotalCalculada . $fila);
+        $filaEncabezado = $fila;
+        $fila++;
+        $filaPrimeraDato = $fila;
+
+        foreach ($filasOrdenadas as $meta) {
+            $clave = $meta['clave'];
+            $hoja->setCellValue('A' . $fila, $meta['etiqueta']);
+            $totalFila = 0;
+            $col = 1;
+            foreach ($fechasPeriodo as $fecha) {
+                $col++;
+                $fechaStr = $fecha->format('Y-m-d');
+                $cantidad = $matriz[$clave][$fechaStr] ?? 0;
+                $totalFila += $cantidad;
+                $letraCol = Coordinate::stringFromColumnIndex($col);
+                $hoja->setCellValue($letraCol . $fila, $cantidad);
+            }
+            $col++;
+            $letraColTotal = Coordinate::stringFromColumnIndex($col);
+            $hoja->setCellValue($letraColTotal . $fila, $totalFila);
+            $fila++;
+        }
+
+        $ultimaFilaDatos = $fila - 1;
+        if ($ultimaFilaDatos >= $filaPrimeraDato) {
+            $this->aplicarBordesTabla($hoja, 'A' . $filaEncabezado . ':' . $letraTotalCalculada . $ultimaFilaDatos);
+            $hoja->getStyle('B' . $filaPrimeraDato . ':' . $letraTotalCalculada . $ultimaFilaDatos)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        } elseif ($filasOrdenadas === []) {
+            $this->aplicarBordesTabla($hoja, 'A' . $filaEncabezado . ':' . $letraTotalCalculada . $filaEncabezado);
+        }
+
+        return $fila + 2;
     }
 
     private function aplicarEstiloTitulo($hoja, string $rango): void
@@ -730,35 +827,365 @@ class GestionHumanaController extends Controller
         return $response;
     }
 
+    private function nominaDisparadorLayoutIbcActivo(array $sedesSeleccionadasIds): bool
+    {
+        if ($sedesSeleccionadasIds === []) {
+            return false;
+        }
+        $triggers = config('reportes.nomina_layout_ibc.sedes_nombres_disparador', []);
+        if (! is_array($triggers) || $triggers === []) {
+            return false;
+        }
+        $needles = array_map(fn ($n) => mb_strtoupper(trim((string) $n)), $triggers);
+        $sedes = Sede::query()->whereIn('id_sede', $sedesSeleccionadasIds)->get(['id_sede', 'nombre']);
+        foreach ($sedes as $sede) {
+            if (in_array(mb_strtoupper(trim((string) $sede->nombre)), $needles, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolverIdEmpresaPrincipalNominaIbc(): ?int
+    {
+        $nombres = config('reportes.nomina_layout_ibc.empresa_principal_nombres', ['IBC']);
+        if (! is_array($nombres)) {
+            return null;
+        }
+        foreach ($nombres as $nom) {
+            $row = Empresa::query()
+                ->whereRaw('UPPER(TRIM(nombre)) = ?', [mb_strtoupper(trim((string) $nom))])
+                ->first();
+            if ($row !== null) {
+                return (int) $row->id_empresa;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Hojas adicionales del layout IBC (después de Data + Resumen), según filtro sede configurado.
+     */
+    private function agregarHojasNominaLayoutIbc(
+        Spreadsheet $spreadsheet,
+        \Illuminate\Support\Collection $consumos,
+        int $idEmpresaIbc,
+        string $nombreEmpresaIbc,
+        Carbon $fechaDesdeNomina,
+        Carbon $fechaHastaNomina
+    ): void {
+        $titulosHojaUsados = [];
+
+        // 1) FIJO y SENA, empresa empleadora IBC — una hoja por casino
+        $fijoSenaIbc = $consumos->filter(function (RegistroConsumo $c) use ($idEmpresaIbc) {
+            $t = $this->tipoUsuarioNominaEfectivo($c);
+            if (! in_array($t, ['FIJO', 'SENA'], true)) {
+                return false;
+            }
+
+            return $this->idEmpresaEfectivaResumenQuincena($c) === $idEmpresaIbc;
+        });
+
+        foreach ($fijoSenaIbc->groupBy('id_casino')->sortKeys() as $itemsCasino) {
+            if ($itemsCasino->isEmpty()) {
+                continue;
+            }
+            $prim = $itemsCasino->first();
+            $nomCasino = trim((string) ($prim->casino_nombre ?? $prim->casino?->nombre ?? 'Sin casino'));
+            $tituloCelda = $nombreEmpresaIbc . ' - ' . $nomCasino;
+            $nombreHoja = $this->tituloHojaNominaUnico($tituloCelda, $titulosHojaUsados);
+            $hoja = $spreadsheet->createSheet();
+            $hoja->setTitle($nombreHoja);
+            $hoja->mergeCells('A1:D1');
+            $hoja->setCellValue('A1', $tituloCelda);
+            $this->aplicarEstiloTitulo($hoja, 'A1:D1');
+            $this->agregarBloqueTablaNominaDocumentos($hoja, 3, null, $itemsCasino);
+            $this->ajustarAnchoColumnasNominaDetalle($hoja);
+        }
+
+        // 2) Contratistas — una hoja por empresa contratista (nombre de hoja = empresa); tablas por casino dentro de la hoja
+        $contratistas = $consumos->filter(fn (RegistroConsumo $c) => $this->tipoUsuarioNominaEfectivo($c) === 'CONTRATISTA');
+        if ($contratistas->isNotEmpty()) {
+            $porEmpresaContr = $contratistas->groupBy(function (RegistroConsumo $c) {
+                return mb_strtoupper(trim((string) ($c->empresa_contratista_nombre ?? '')));
+            })->sortKeys();
+            foreach ($porEmpresaContr as $itemsEmpresaContr) {
+                $primContr = $itemsEmpresaContr->first();
+                $nomHojaContr = trim((string) ($primContr->empresa_contratista_nombre ?? ''));
+                if ($nomHojaContr === '') {
+                    $nomHojaContr = 'Sin empresa contratista';
+                }
+                $hoja = $spreadsheet->createSheet();
+                $hoja->setTitle($this->tituloHojaNominaUnico($nomHojaContr, $titulosHojaUsados));
+                $fila = 1;
+                $gruposContr = $itemsEmpresaContr->groupBy(function (RegistroConsumo $c) {
+                    return (string) ($c->id_casino ?? '0');
+                })->sortKeys();
+                foreach ($gruposContr as $itemsGrupo) {
+                    $p = $itemsGrupo->first();
+                    $nomCont = trim((string) ($p->empresa_contratista_nombre ?? 'Sin empresa contratista'));
+                    $nomCas = trim((string) ($p->casino_nombre ?? $p->casino?->nombre ?? 'Sin casino'));
+                    $fila = $this->agregarBloqueTablaNominaDocumentos($hoja, $fila, $nomCont . ' — ' . $nomCas, $itemsGrupo);
+                    $fila += 2;
+                }
+                $fila = $this->agregarDetallePorPersonaContratista($hoja, $fila, $itemsEmpresaContr, $fechaDesdeNomina, $fechaHastaNomina);
+                $this->ajustarAnchoColumnasNominaContratista($hoja);
+            }
+        }
+
+        // 3) Consumos de otras empresas en IBC (empleador distinto de IBC; sin contratistas; temporales IBC van en hoja TEMPORALES; invitados en hoja INVITADOS)
+        $otrasEmp = $consumos->filter(function (RegistroConsumo $c) use ($idEmpresaIbc) {
+            if ($this->esInvitadoNomina($c)) {
+                return false;
+            }
+            $t = $this->tipoUsuarioNominaEfectivo($c);
+            if ($t === 'CONTRATISTA') {
+                return false;
+            }
+            if ($t === 'TEMPORAL' && $this->idEmpresaEfectivaResumenQuincena($c) === $idEmpresaIbc) {
+                return false;
+            }
+
+            return $this->idEmpresaEfectivaResumenQuincena($c) !== $idEmpresaIbc;
+        });
+        if ($otrasEmp->isNotEmpty()) {
+            $hoja = $spreadsheet->createSheet();
+            $hoja->setTitle($this->tituloHojaNominaUnico('Otras empr en IBC', $titulosHojaUsados));
+            $hoja->mergeCells('A1:D1');
+            $hoja->setCellValue('A1', 'Consumos de otras empresas en IBC');
+            $this->aplicarEstiloTitulo($hoja, 'A1:D1');
+            $fila = 3;
+            foreach ($otrasEmp->groupBy(fn (RegistroConsumo $c) => $this->idEmpresaEfectivaResumenQuincena($c))->sortKeys() as $itemsGrupo) {
+                if ($itemsGrupo->isEmpty()) {
+                    continue;
+                }
+                $p = $itemsGrupo->first();
+                $nomEmpBloque = $this->nombreEmpresaEfectivaResumenQuincena($p);
+                $fila = $this->agregarBloqueTablaNominaDocumentos($hoja, $fila, $nomEmpBloque, $itemsGrupo);
+                $fila += 2;
+            }
+            $this->ajustarAnchoColumnasNominaDetalle($hoja);
+        }
+
+        // 4) Temporales con empresa empleadora IBC — una hoja, tabla por restaurante (casino)
+        $tempIbc = $consumos->filter(function (RegistroConsumo $c) use ($idEmpresaIbc) {
+            if ($this->tipoUsuarioNominaEfectivo($c) !== 'TEMPORAL') {
+                return false;
+            }
+
+            return $this->idEmpresaEfectivaResumenQuincena($c) === $idEmpresaIbc;
+        });
+        if ($tempIbc->isNotEmpty()) {
+            $hoja = $spreadsheet->createSheet();
+            $hoja->setTitle($this->tituloHojaNominaUnico('TEMPORALES', $titulosHojaUsados));
+            $hoja->mergeCells('A1:D1');
+            $hoja->setCellValue('A1', 'TEMPORALES');
+            $this->aplicarEstiloTitulo($hoja, 'A1:D1');
+            $fila = 3;
+            foreach ($tempIbc->groupBy('id_casino')->sortKeys() as $itemsGrupo) {
+                $p = $itemsGrupo->first();
+                $nomCas = trim((string) ($p->casino_nombre ?? $p->casino?->nombre ?? 'Sin casino'));
+                $fila = $this->agregarBloqueTablaNominaDocumentos($hoja, $fila, 'TEMPORALES — ' . $nomCas, $itemsGrupo);
+                $fila += 2;
+            }
+            $this->ajustarAnchoColumnasNominaDetalle($hoja);
+        }
+    }
+
+    /**
+     * Tabla detallada por colaborador: una subtabla por persona con filas = cada consumo en el rango (fecha, documento, nombre, tipo de comida, precio).
+     */
+    private function agregarDetallePorPersonaContratista(
+        Worksheet $hoja,
+        int $filaInicio,
+        \Illuminate\Support\Collection $itemsEmpresaContr,
+        Carbon $fechaDesdeNomina,
+        Carbon $fechaHastaNomina
+    ): int {
+        $fila = $filaInicio + 2;
+        $hoja->mergeCells('A' . $fila . ':E' . $fila);
+        $hoja->setCellValue(
+            'A' . $fila,
+            'Detalle por persona — ' . $fechaDesdeNomina->format('d/m/Y') . ' al ' . $fechaHastaNomina->format('d/m/Y')
+        );
+        $hoja->getStyle('A' . $fila)->getFont()->setBold(true)->setSize(12);
+        $hoja->getStyle('A' . $fila)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT)->setVertical(Alignment::VERTICAL_CENTER);
+        $fila += 2;
+
+        $porPersona = $itemsEmpresaContr->groupBy(function (RegistroConsumo $c) {
+            return trim((string) ($c->documento ?? $c->usuario?->documento ?? $c->visitante?->documento ?? '—'));
+        })->sortKeys();
+
+        foreach ($porPersona as $itemsPersona) {
+            $prim = $itemsPersona->first();
+            $doc = trim((string) ($prim->documento ?? $prim->usuario?->documento ?? $prim->visitante?->documento ?? '—'));
+            $nombre = $prim->nombres_consumidor ?? $prim->usuario?->nombres ?? $prim->visitante?->nombre ?? '—';
+            $hoja->mergeCells('A' . $fila . ':E' . $fila);
+            $hoja->setCellValue('A' . $fila, $doc . ' — ' . $nombre);
+            $hoja->getStyle('A' . $fila)->getFont()->setBold(true);
+            $hoja->getStyle('A' . $fila)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+            $fila += 2;
+
+            $filaEnc = $fila;
+            $hoja->setCellValue('A' . $fila, 'Fecha');
+            $hoja->setCellValue('B' . $fila, 'Documento');
+            $hoja->setCellValue('C' . $fila, 'Nombre');
+            $hoja->setCellValue('D' . $fila, 'Tipo comida');
+            $hoja->setCellValue('E' . $fila, 'Precio');
+            $this->aplicarEstiloEncabezadoTabla($hoja, 'A' . $fila . ':E' . $fila);
+            $fila++;
+            $filaDatosIni = $fila;
+
+            $ordenados = $itemsPersona->sortBy(function (RegistroConsumo $c) {
+                $fd = $c->fecha_consumo?->format('Y-m-d') ?? '';
+                $h = $c->hora_consumo;
+                $hs = '';
+                if ($h instanceof \DateTimeInterface) {
+                    $hs = $h->format('H:i:s');
+                } elseif (is_string($h) && $h !== '') {
+                    $hs = $h;
+                }
+
+                return $fd . ' ' . $hs;
+            })->values();
+
+            foreach ($ordenados as $c) {
+                $hoja->setCellValue('A' . $fila, $c->fecha_consumo?->format('d/m/Y') ?? '—');
+                $hoja->setCellValue('B' . $fila, $doc);
+                $hoja->setCellValue('C' . $fila, $nombre);
+                $tipoComida = trim((string) ($c->tipo_comida ?? $c->horario_nombre ?? ''));
+                $hoja->setCellValue('D' . $fila, $tipoComida !== '' ? $tipoComida : '—');
+                $precio = round((float) $c->precio_empleado, 2);
+                $hoja->setCellValue('E' . $fila, '$' . number_format($precio, 0, ',', '.'));
+                $fila++;
+            }
+            $filaFin = $fila - 1;
+            if ($filaFin >= $filaDatosIni) {
+                $this->aplicarBordesTabla($hoja, 'A' . $filaEnc . ':E' . $filaFin);
+                $hoja->getStyle('E' . $filaDatosIni . ':E' . $filaFin)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            }
+            $fila += 2;
+        }
+
+        return $fila;
+    }
+
+    private function agregarBloqueTablaNominaDocumentos(Worksheet $hoja, int $filaInicio, ?string $tituloBloque, \Illuminate\Support\Collection $itemsConsumo): int
+    {
+        $fila = $filaInicio;
+        if ($tituloBloque !== null && $tituloBloque !== '') {
+            $hoja->mergeCells('A' . $fila . ':D' . $fila);
+            $hoja->setCellValue('A' . $fila, $tituloBloque);
+            $hoja->getStyle('A' . $fila)->getFont()->setBold(true)->setSize(12);
+            $hoja->getStyle('A' . $fila)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+            $fila += 2;
+        }
+
+        $filaEnc = $fila;
+        $hoja->setCellValue('A' . $fila, 'Documento');
+        $hoja->setCellValue('B' . $fila, 'Nombre');
+        $hoja->setCellValue('C' . $fila, 'Cantidad de vales');
+        $hoja->setCellValue('D' . $fila, 'Total');
+        $this->aplicarEstiloEncabezadoTabla($hoja, 'A' . $fila . ':D' . $fila);
+        $fila++;
+        $porDoc = $itemsConsumo->groupBy(function (RegistroConsumo $c) {
+            return trim((string) ($c->documento ?? $c->usuario?->documento ?? $c->visitante?->documento ?? '—'));
+        });
+        $filaDatosIni = $fila;
+        foreach ($porDoc->sortKeys() as $doc => $regs) {
+            $nombre = $regs->first()->nombres_consumidor ?? $regs->first()->usuario?->nombres ?? $regs->first()->visitante?->nombre ?? '—';
+            $hoja->setCellValue('A' . $fila, $doc);
+            $hoja->setCellValue('B' . $fila, $nombre);
+            $hoja->setCellValue('C' . $fila, $regs->count());
+            $tot = round((float) $regs->sum('precio_empleado'), 2);
+            $hoja->setCellValue('D' . $fila, '$' . number_format($tot, 0, ',', '.'));
+            $fila++;
+        }
+        $filaFin = $fila - 1;
+        if ($filaFin >= $filaDatosIni) {
+            $this->aplicarBordesTabla($hoja, 'A' . $filaEnc . ':D' . $filaFin);
+            $hoja->getStyle('C' . $filaDatosIni . ':D' . $filaFin)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+        }
+
+        return $fila;
+    }
+
+    private function ajustarAnchoColumnasNominaDetalle(Worksheet $hoja): void
+    {
+        $hoja->getColumnDimension('A')->setWidth(18);
+        $hoja->getColumnDimension('B')->setWidth(34);
+        $hoja->getColumnDimension('C')->setWidth(18);
+        $hoja->getColumnDimension('D')->setWidth(16);
+    }
+
+    /** Anchos para hoja contratista: resumen (A–D) + detalle por persona (incl. E). */
+    private function ajustarAnchoColumnasNominaContratista(Worksheet $hoja): void
+    {
+        $hoja->getColumnDimension('A')->setWidth(14);
+        $hoja->getColumnDimension('B')->setWidth(18);
+        $hoja->getColumnDimension('C')->setWidth(30);
+        $hoja->getColumnDimension('D')->setWidth(20);
+        $hoja->getColumnDimension('E')->setWidth(14);
+    }
+
+    /**
+     * Títulos de hoja Excel (máx. 31 caracteres, sin caracteres prohibidos).
+     *
+     * @param  array<string, bool>  $usados
+     */
+    private function tituloHojaNominaUnico(string $preferido, array &$usados): string
+    {
+        $base = $this->sanitizarTituloHojaNomina($preferido);
+        if ($base === '') {
+            $base = 'Hoja';
+        }
+        $candidato = $base;
+        $i = 2;
+        while (isset($usados[$candidato])) {
+            $suf = ' ' . $i;
+            $maxBase = 31 - mb_strlen($suf);
+            $candidato = mb_substr($base, 0, $maxBase) . $suf;
+            $i++;
+        }
+        $usados[$candidato] = true;
+
+        return $candidato;
+    }
+
+    private function sanitizarTituloHojaNomina(string $nombre): string
+    {
+        $nombre = preg_replace('/[\*\?\:\[\]\/\\\\]/', '', $nombre);
+
+        return mb_substr(trim($nombre), 0, 31);
+    }
+
     private function obtenerConsumosFiltrados(Request $request): \Illuminate\Support\Collection
     {
+        /** @var Usuario $user */
         $user = $request->user();
         $empresasPermitidas = $user->empresasAcceso()->get()->pluck('id_empresa')->toArray();
 
         $fechaDesde = $request->input('fecha_desde');
         $fechaHasta = $request->input('fecha_hasta');
-        $empresasSeleccionadas = $request->input('empresas', []);
-        if (! is_array($empresasSeleccionadas)) {
-            $empresasSeleccionadas = $empresasSeleccionadas ? [$empresasSeleccionadas] : [];
+        $sedesDisponibles = $this->sedesDisponiblesParaFiltro($user, $empresasPermitidas);
+        $sedesInputRaw = $request->input('sedes', []);
+        if (! is_array($sedesInputRaw)) {
+            $sedesInputRaw = $sedesInputRaw !== null && $sedesInputRaw !== '' ? [$sedesInputRaw] : [];
         }
-        $empresasSeleccionadas = array_values(array_filter(array_map('intval', $empresasSeleccionadas)));
+        $sedesSeleccionadas = $this->expandirSedesSeleccionadas($sedesInputRaw, $sedesDisponibles);
         $busquedaPersona = trim((string) $request->input('busqueda_persona', ''));
 
         $query = RegistroConsumo::query()
             ->whereBetween('fecha_consumo', [$fechaDesde, $fechaHasta])
-            ->with(['usuario.tipoUsuario', 'visitante', 'empresa', 'casino', 'horarioConsumo'])
+            ->with(['usuario.tipoUsuario', 'usuario.empresa', 'visitante', 'empresa', 'casino', 'horarioConsumo'])
             ->orderBy('fecha_consumo')
+            ->orderBy('id_casino')
             ->orderBy('id_empresa')
             ->orderBy('hora_consumo');
 
-        if (count($empresasPermitidas) > 0) {
-            $query->whereIn('id_empresa', $empresasPermitidas);
-        } elseif ($user->role === 'gestionhumana') {
-            $query->where('id_empresa', $user->id_empresa);
-        }
-        if (! empty($empresasSeleccionadas)) {
-            $query->whereIn('id_empresa', $empresasSeleccionadas);
-        }
+        $this->aplicarAlcanceReporte($query, $user, $empresasPermitidas, $sedesSeleccionadas);
         if ($busquedaPersona !== '') {
             $term = '%' . $busquedaPersona . '%';
             $query->where(function ($q) use ($term) {
@@ -770,5 +1197,207 @@ class GestionHumanaController extends Controller
         }
 
         return $query->get();
+    }
+
+    /**
+     * @param  array<int, int>  $empresasPermitidas
+     * @param  array<int, int>  $sedesSeleccionadas  IDs de sede permitidos para el usuario (ya validados)
+     */
+    private function aplicarAlcanceReporte(
+        \Illuminate\Database\Eloquent\Builder $query,
+        Usuario $user,
+        array $empresasPermitidas,
+        array $sedesSeleccionadas
+    ): void {
+        if ($sedesSeleccionadas !== []) {
+            $idsCasino = $this->idsCasinosEnSedes($sedesSeleccionadas);
+            $query->whereIn('id_casino', $idsCasino);
+
+            return;
+        }
+
+        if (count($empresasPermitidas) > 0) {
+            $query->whereIn('id_empresa', $empresasPermitidas);
+        } elseif ($user->role === 'gestionhumana') {
+            $query->where('id_empresa', $user->id_empresa);
+        }
+    }
+
+    /**
+     * Casinos ubicados en las sedes indicadas (incluye eliminados en soft delete para no perder histórico).
+     *
+     * @param  array<int, int>  $sedesIds
+     * @return array<int, int>
+     */
+    private function idsCasinosEnSedes(array $sedesIds): array
+    {
+        if ($sedesIds === []) {
+            return [];
+        }
+
+        return Casino::withTrashed()
+            ->whereIn('id_sede', $sedesIds)
+            ->pluck('id_casino')
+            ->unique()
+            ->all();
+    }
+
+    /**
+     * @param  array<int, int>  $empresasPermitidas
+     * @return \Illuminate\Support\Collection<int, Sede>
+     */
+    private function sedesDisponiblesParaFiltro(Usuario $user, array $empresasPermitidas): \Illuminate\Support\Collection
+    {
+        $q = Sede::query()->orderBy('nombre');
+
+        if (count($empresasPermitidas) > 0) {
+            $q->whereHas('casinos', function ($cq) use ($empresasPermitidas) {
+                $cq->whereHas('empresas', function ($eq) use ($empresasPermitidas) {
+                    $eq->whereIn('empresas.id_empresa', $empresasPermitidas);
+                });
+            });
+        } elseif ($user->role === 'gestionhumana' && $user->id_empresa) {
+            $q->whereHas('casinos', function ($cq) use ($user) {
+                $cq->whereHas('empresas', function ($eq) use ($user) {
+                    $eq->where('empresas.id_empresa', $user->id_empresa);
+                });
+            });
+        }
+
+        return $q->get();
+    }
+
+    /**
+     * Opciones del filtro sede: grupos configurados primero; sedes sueltas (las que no entran en un grupo completo).
+     *
+     * @param  \Illuminate\Support\Collection<int, Sede>  $sedes
+     * @return list<array{type: 'grupo', clave: string, etiqueta: string, ids: list<int>}|array{type: 'sede', id_sede: int, etiqueta: string}>
+     */
+    private function opcionesFiltroSedeAgrupadas(\Illuminate\Support\Collection $sedes): array
+    {
+        $gruposConfig = config('reportes.sedes_agrupadas', []);
+        $out = [];
+        /** @var array<string, bool> $nombresExcluir */
+        $nombresExcluir = [];
+
+        foreach ($gruposConfig as $g) {
+            $clave = (string) ($g['clave'] ?? '');
+            $etiqueta = (string) ($g['etiqueta'] ?? $clave);
+            $nombres = $g['nombres'] ?? [];
+            if ($clave === '' || ! is_array($nombres) || $nombres === []) {
+                continue;
+            }
+            $idsEncontrados = [];
+            $completo = true;
+            foreach ($nombres as $nomBuscado) {
+                $needle = mb_strtoupper(trim((string) $nomBuscado));
+                $found = null;
+                foreach ($sedes as $s) {
+                    if (mb_strtoupper(trim((string) $s->nombre)) === $needle) {
+                        $found = (int) $s->id_sede;
+                        break;
+                    }
+                }
+                if ($found === null) {
+                    $completo = false;
+                    break;
+                }
+                $idsEncontrados[] = $found;
+            }
+            if (! $completo) {
+                continue;
+            }
+            $idsEncontrados = array_values(array_unique($idsEncontrados));
+            if (count($idsEncontrados) !== count($nombres)) {
+                continue;
+            }
+            foreach ($nombres as $n) {
+                $nombresExcluir[mb_strtoupper(trim((string) $n))] = true;
+            }
+            $out[] = ['tipo' => 'grupo', 'clave' => $clave, 'etiqueta' => $etiqueta, 'ids' => $idsEncontrados];
+        }
+
+        foreach ($sedes as $s) {
+            $key = mb_strtoupper(trim((string) $s->nombre));
+            if (isset($nombresExcluir[$key])) {
+                continue;
+            }
+            $out[] = ['tipo' => 'sede', 'id_sede' => (int) $s->id_sede, 'etiqueta' => (string) $s->nombre];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param  list<string|int>  $inputRaw  valores de sedes[] (ids o "grupo:clave")
+     * @param  \Illuminate\Support\Collection<int, Sede>  $sedesDisponibles
+     * @return array<int, int>
+     */
+    private function expandirSedesSeleccionadas(array $inputRaw, \Illuminate\Support\Collection $sedesDisponibles): array
+    {
+        $permitidos = $sedesDisponibles->pluck('id_sede')->all();
+        $ids = [];
+        foreach ($inputRaw as $v) {
+            if ($v === null || $v === '') {
+                continue;
+            }
+            $v = is_string($v) ? trim($v) : (string) $v;
+            if ($v === '') {
+                continue;
+            }
+            if (str_starts_with($v, 'grupo:')) {
+                $clave = substr($v, strlen('grupo:'));
+                foreach (config('reportes.sedes_agrupadas', []) as $g) {
+                    if ((string) ($g['clave'] ?? '') !== $clave) {
+                        continue;
+                    }
+                    foreach (($g['nombres'] ?? []) as $nomBuscado) {
+                        foreach ($sedesDisponibles as $s) {
+                            if (mb_strtoupper(trim((string) $s->nombre)) === mb_strtoupper(trim((string) $nomBuscado))) {
+                                $ids[] = (int) $s->id_sede;
+                                break;
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
+            $ids[] = (int) $v;
+        }
+        $ids = array_values(array_unique(array_filter($ids, fn (int $x) => $x > 0)));
+
+        return array_values(array_intersect($ids, $permitidos));
+    }
+
+    /**
+     * Valores recibidos en sedes[] para mantener el estado de los checkboxes (incl. "grupo:clave").
+     *
+     * @return list<string>
+     */
+    private function valoresCheckboxSedeRequest(mixed $input): array
+    {
+        if (! is_array($input)) {
+            $input = $input !== null && $input !== '' ? [$input] : [];
+        }
+        $out = [];
+        foreach ($input as $v) {
+            if ($v === null || $v === '') {
+                continue;
+            }
+            $v = is_string($v) ? trim($v) : (string) $v;
+            if ($v === '') {
+                continue;
+            }
+            if (str_starts_with($v, 'grupo:')) {
+                $out[] = $v;
+                continue;
+            }
+            $i = (int) $v;
+            if ($i > 0) {
+                $out[] = (string) $i;
+            }
+        }
+
+        return array_values(array_unique($out, SORT_STRING));
     }
 }

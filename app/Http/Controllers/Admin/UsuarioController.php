@@ -28,7 +28,16 @@ class UsuarioController extends Controller
     {
         $query = Usuario::with(['empresa', 'rol', 'tipoUsuario']);
         if ($request->filled('empresa')) {
-            $query->where('id_empresa', $request->empresa);
+            $empresaParam = (string) $request->input('empresa');
+            if (preg_match('/^t-(\d+)$/', $empresaParam, $m)) {
+                $query->where('id_empresa_temporal', (int) $m[1]);
+            } elseif (preg_match('/^c-(\d+)$/', $empresaParam, $m)) {
+                $query->where('id_empresa_contratista', (int) $m[1]);
+            } elseif (preg_match('/^e-(\d+)$/', $empresaParam, $m)) {
+                $query->where('id_empresa', (int) $m[1]);
+            } elseif (preg_match('/^\d+$/', $empresaParam)) {
+                $query->where('id_empresa', (int) $empresaParam);
+            }
         }
         if ($request->filled('buscar')) {
             $q = $request->buscar;
@@ -39,7 +48,10 @@ class UsuarioController extends Controller
         }
         $usuarios = $query->orderBy('nombres')->paginate(15)->withQueryString();
         $empresas = Empresa::orderBy('nombre')->get();
-        return view('admin.usuarios.index', compact('usuarios', 'empresas'));
+        $empresasTemporales = EmpresaTemporal::orderBy('nombre')->get();
+        $empresasContratistas = EmpresaContratista::orderBy('nombre')->get();
+
+        return view('admin.usuarios.index', compact('usuarios', 'empresas', 'empresasTemporales', 'empresasContratistas'));
     }
 
     public function create(): View
